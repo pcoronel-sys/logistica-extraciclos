@@ -1,103 +1,70 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
+import plotly.express as px
 
 # 1. CONFIGURACIÓN DE PÁGINA
-st.set_page_config(page_title="Logística Bagó", layout="wide", page_icon="🧪")
+st.set_page_config(page_title="Logística Bagó Pro", layout="wide", page_icon="🧪")
 
-# --- ESTILO GLASSMORPHISM Y COLORES MAGENTA ---
+# --- ESTILO MINIMALISTA BLANCO Y MAGENTA ---
 st.markdown("""
     <style>
-    /* Fondo general */
+    /* Fondo Blanco Puro */
     .stApp {
-        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        background-color: #ffffff;
     }
     
-    /* Efecto Glass para tarjetas */
+    /* Tarjetas Blancas con Sombra Suave */
     .glass-card {
-        background: rgba(255, 255, 255, 0.7);
-        backdrop-filter: blur(10px);
-        -webkit-backdrop-filter: blur(10px);
-        border-radius: 20px;
-        border: 1px solid rgba(255, 255, 255, 0.18);
-        padding: 25px;
-        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
+        background: #ffffff;
+        border-radius: 15px;
+        border: 1px solid #e6e6e6;
+        padding: 20px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
         margin-bottom: 20px;
     }
 
-    /* Estilo para métricas (Glass Magenta) */
+    /* Métricas */
     div[data-testid="stMetric"] {
-        background: rgba(225, 0, 120, 0.05);
-        backdrop-filter: blur(4px);
-        border-radius: 15px;
-        border-left: 5px solid #E10078; /* Magenta Bagó */
+        background: #fdfdfd;
+        border-radius: 10px;
+        border: 1px solid #eeeeee;
+        border-top: 4px solid #E10078;
         padding: 15px !important;
     }
 
-    /* Botones dinámicos */
+    /* Botones Magenta */
     .stButton>button {
-        background: linear-gradient(90deg, #E10078 0%, #8E004C 100%);
+        background-color: #E10078;
         color: white;
-        border-radius: 12px;
+        border-radius: 8px;
         border: none;
-        padding: 10px 25px;
-        transition: all 0.3s ease;
-        font-weight: bold;
-        width: 100%;
+        transition: 0.3s;
+        font-weight: 600;
     }
     .stButton>button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 5px 15px rgba(225, 0, 120, 0.4);
+        background-color: #8E004C;
         color: white;
-    }
-
-    /* Títulos */
-    h1, h2, h3 {
-        color: #1a1a1a;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    }
-    
-    .bago-banner {
-        background: linear-gradient(90deg, #004a99 0%, #E10078 100%);
-        padding: 40px;
-        border-radius: 20px;
-        color: white;
-        text-align: center;
-        margin-bottom: 30px;
+        box-shadow: 0 4px 8px rgba(225, 0, 120, 0.3);
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- PANTALLA DE INICIO ---
-if 'procesado' not in st.session_state:
-    st.markdown("""
-        <div class="bago-banner">
-            <h1 style="color: white; margin:0;">LABORATORIOS BAGÓ</h1>
-            <p style="font-size: 1.2rem; opacity: 0.9;">Sistema Inteligente de Liquidación Logística</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    col_a, col_b = st.columns([1, 2])
-    with col_a:
-        st.image("https://www.bago.com.ec/wp-content/uploads/2021/05/logo-bago.png", width=200) # Logo genérico si está disponible
-    with col_b:
-        st.subheader("🚀 ¡Bienvenido!")
-        st.write("Sube tu archivo de extra-ciclos para procesar los gastos de MM y MP.")
-    st.markdown('</div>', unsafe_allow_html=True)
+# --- ENCABEZADO ---
+st.image("https://www.bago.com.ec/wp-content/uploads/2021/05/logo-bago.png", width=150)
+st.title("📊 Control de Liquidación Logística")
+st.markdown("Plataforma de gestión de gastos para extra-ciclos.")
 
-archivo = st.file_uploader("", type=['xlsx'])
+archivo = st.file_uploader("📂 Cargar archivo Excel", type=['xlsx'])
 
 if archivo:
-    st.session_state['procesado'] = True
     try:
-        # --- LÓGICA DE PROCESAMIENTO ---
+        # --- PROCESAMIENTO ---
         xls = pd.ExcelFile(archivo)
         df_carga = pd.read_excel(xls, 'Carga')
         df_gp = pd.read_excel(xls, 'Maestro_GP')
         df_costos = pd.read_excel(xls, 'Maestro_Costos')
 
-        # Normalización
         for df in [df_carga, df_gp, df_costos]:
             df.columns = df.columns.str.strip().str.upper()
 
@@ -107,63 +74,88 @@ if archivo:
         df_carga['CODIGO'] = clean_txt(df_carga['CODIGO']).str.replace('.0', '', regex=False)
         col_ref_gp = [c for c in df_gp.columns if 'CODIGO' in c][0]
         df_gp[col_ref_gp] = clean_txt(df_gp[col_ref_gp]).str.replace('.0', '', regex=False)
-        df_carga['DESCRIPCIÓN ZONA'] = clean_txt(df_carga['DESCRIPCIÓN ZONA'])
-        df_costos['DESCRIPCIÓN ZONA'] = clean_txt(df_costos['DESCRIPCIÓN ZONA'])
-
-        df_gp = df_gp.drop_duplicates(subset=[col_ref_gp])
-        df_costos = df_costos.drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
-        df_costos = df_costos.rename(columns={'PRECIO_PREP': 'PREPARACION', 'PRECIO_TRANS': 'TRANSPORTE'})
-
+        
+        # Cruces
         res = pd.merge(df_carga, df_gp[[col_ref_gp, 'GP', 'TIPO']], left_on='CODIGO', right_on=col_ref_gp, how='left')
+        
+        # Identificar códigos faltantes en Maestro
+        faltantes = res[res['GP'].isna()]['CODIGO'].unique()
+
+        df_costos = df_costos.rename(columns={'PRECIO_PREP': 'PREPARACION', 'PRECIO_TRANS': 'TRANSPORTE'})
+        res['DESCRIPCIÓN ZONA'] = clean_txt(res['DESCRIPCIÓN ZONA'])
+        df_costos['DESCRIPCIÓN ZONA'] = clean_txt(df_costos['DESCRIPCIÓN ZONA'])
+        
         res = pd.merge(res, df_costos[['DESCRIPCIÓN ZONA', 'PREPARACION', 'TRANSPORTE']], on='DESCRIPCIÓN ZONA', how='left')
 
         res['BULTOS'] = clean_num(res['BULTOS'])
         res['LOG_TOT'] = (clean_num(res['PREPARACION']) + clean_num(res['TRANSPORTE'])) * res['BULTOS']
 
-        # --- CÁLCULOS FINALES ---
-        grouped = res.groupby(['GP', 'TIPO'])['LOG_TOT'].sum().reset_index()
-        pivot = grouped.pivot(index='GP', columns='TIPO', values='LOG_TOT').fillna(0).reset_index()
+        # --- FILTROS LATERALES ---
+        st.sidebar.header("⚙️ Filtros de Reporte")
+        lista_gp = ["TODOS"] + sorted(res['GP'].dropna().unique().tolist())
+        gp_seleccionado = st.sidebar.selectbox("Seleccionar Gerente (GP)", lista_gp)
 
-        df_final = pd.DataFrame({'GERENTE (GP)': pivot['GP']})
-        df_final['LOGISTICA MM'] = pivot['MM'] if 'MM' in pivot.columns else 0.0
-        df_final['LOGISTICA MP'] = pivot['MP'] if 'MP' in pivot.columns else 0.0
-        df_final['SUBTOTAL'] = df_final['LOGISTICA MM'] + df_final['LOGISTICA MP']
-        df_final['IVA 15%'] = df_final['SUBTOTAL'] * 0.15
-        df_final['TOTAL A FACTURAR'] = df_final['SUBTOTAL'] + df_final['IVA 15%']
+        if gp_seleccionado != "TODOS":
+            res_filtered = res[res['GP'] == gp_seleccionado]
+        else:
+            res_filtered = res
 
-        # --- INTERFAZ DE RESULTADOS ---
-        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-        st.subheader("📉 Resumen Ejecutivo")
+        # --- CÁLCULOS ---
+        grouped = res_filtered.groupby('TIPO')['LOG_TOT'].sum().reset_index()
+        pivot = grouped.set_index('TIPO').T
+        
+        mm_val = pivot['MM'].values[0] if 'MM' in pivot.columns else 0
+        mp_val = pivot['MP'].values[0] if 'MP' in pivot.columns else 0
+        subtotal = mm_val + mp_val
+        iva = subtotal * 0.15
+        total = subtotal + iva
+
+        # --- VISUALIZACIÓN ---
+        st.markdown('---')
+        if len(faltantes) > 0:
+            st.warning(f"⚠️ Se detectaron {len(faltantes)} códigos sin registro en el Maestro GP. Revisa la pestaña de Auditoría.")
+
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("LOGÍSTICA MM", f"$ {df_final['LOGISTICA MM'].sum():,.2f}")
-        c2.metric("LOGÍSTICA MP", f"$ {df_final['LOGISTICA MP'].sum():,.2f}")
-        c3.metric("IVA 15%", f"$ {df_final['IVA 15%'].sum():,.2f}")
-        c4.metric("GRAN TOTAL", f"$ {df_final['TOTAL A FACTURAR'].sum():,.2f}")
-        st.markdown('</div>', unsafe_allow_html=True)
+        c1.metric("LOGÍSTICA MM", f"$ {mm_val:,.2f}")
+        c2.metric("LOGÍSTICA MP", f"$ {mp_val:,.2f}")
+        c3.metric("IVA (15%)", f"$ {iva:,.2f}")
+        c4.metric("TOTAL GP", f"$ {total:,.2f}")
 
-        tab1, tab2 = st.tabs(["📋 Liquidación GP", "🔍 Detalle Técnico"])
+        col_graf, col_tab = st.columns([1, 2])
 
-        with tab1:
-            st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-            tot_row = {'GERENTE (GP)': 'TOTALES GENERALES'}
-            for col in df_final.columns[1:]: tot_row[col] = df_final[col].sum()
-            df_disp = pd.concat([df_final, pd.DataFrame([tot_row])], ignore_index=True)
+        with col_graf:
+            st.markdown("### 📈 Mix de Gasto")
+            fig = px.pie(values=[mm_val, mp_val], names=['MM', 'MP'], 
+                         color_discrete_sequence=['#E10078', '#004a99'], hole=0.4)
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col_tab:
+            st.markdown(f"### 📋 Liquidación: {gp_seleccionado}")
+            # Cuadro detallado del GP actual
+            resumen_gp = res_filtered.groupby(['GP', 'TIPO'])['LOG_TOT'].sum().unstack(fill_value=0).reset_index()
+            resumen_gp['SUBTOTAL'] = resumen_gp.get('MM', 0) + resumen_gp.get('MP', 0)
+            resumen_gp['IVA 15%'] = resumen_gp['SUBTOTAL'] * 0.15
+            resumen_gp['TOTAL'] = resumen_gp['SUBTOTAL'] + resumen_gp['IVA 15%']
             
-            st.dataframe(df_disp.style.format({c: "$ {:,.2f}" for c in df_disp.columns if c != 'GERENTE (GP)'}), use_container_width=True)
-            
-            # Botón de descarga con estilo
+            st.dataframe(resumen_gp.style.format(precision=2), use_container_width=True)
+
+        # --- AUDITORÍA Y DESCARGA ---
+        tab_aud, tab_falt = st.tabs(["🔍 Detalle Completo", "❌ Códigos Faltantes"])
+        
+        with tab_aud:
+            st.dataframe(res)
             output = BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                df_disp.to_excel(writer, index=False, sheet_name='Resumen')
+                resumen_gp.to_excel(writer, index=False, sheet_name='Liquidacion')
                 res.to_excel(writer, index=False, sheet_name='Detalle')
-            
-            st.download_button("📥 DESCARGAR REPORTE GERENCIAL", data=output.getvalue(), file_name="Liquidacion_Bago.xlsx", use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.download_button("📥 DESCARGAR EXCEL", data=output.getvalue(), file_name="Liquidacion_Bago_Pro.xlsx", use_container_width=True)
 
-        with tab2:
-            st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-            st.dataframe(res, use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
+        with tab_falt:
+            if len(faltantes) > 0:
+                st.write("Los siguientes códigos están en 'Carga' pero no en 'Maestro_GP':")
+                st.write(faltantes)
+            else:
+                st.success("¡Todo en orden! Todos los códigos existen en el Maestro.")
 
     except Exception as e:
-        st.error(f"Error en el sistema: {e}")
+        st.error(f"Error: {e}")
