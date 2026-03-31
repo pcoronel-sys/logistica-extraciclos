@@ -4,61 +4,54 @@ from io import BytesIO
 
 st.set_page_config(page_title="Automatización Logística", layout="wide")
 
-st.title("🚚 Calculador Automático de Logística")
-st.write("Sube tu Excel y el sistema calculará Totales x Bultos y asignará GP.")
+st.title("🚚 Sistema de Cálculo Logístico x Bultos")
+st.info("Asegúrate de que tu Excel tenga las pestañas: Carga, Maestro_GP y Maestro_Costos")
 
-uploaded_file = st.file_uploader("Sube tu archivo Excel", type=['xlsx'])
+archivo = st.file_uploader("Sube tu archivo Excel aquí", type=['xlsx'])
 
-if uploaded_file:
+if archivo:
     try:
-        # 1. Leer las pestañas
-        df_carga = pd.read_excel(uploaded_file, sheet_name='Carga')
-        df_gp = pd.read_excel(uploaded_file, sheet_name='Maestro_GP')
-        df_costos = pd.read_excel(uploaded_file, sheet_name='Maestro_Costos')
+        # Cargar datos
+        df_carga = pd.read_excel(archivo, sheet_name='Carga')
+        df_gp = pd.read_excel(archivo, sheet_name='Maestro_GP')
+        df_costos = pd.read_excel(archivo, sheet_name='Maestro_Costos')
 
-        # 2. Cruce para asignar el GP (Gerente de Producto)
-        # Traemos la columna 'GP' basada en el 'Denominación Material'
-        df_final = pd.merge(df_carga, df_gp, on='Denominación Material', how='left')
-        df_final['QUIEN PAGA'] = df_final['GP'] # Se asume que el GP es quien paga
+        # Limpiar espacios en blanco en los nombres de las columnas por si acaso
+        for df in [df_carga, df_gp, df_costos]:
+            df.columns = df.columns.str.strip()
 
-        # 3. Cruce para asignar Precios Unitarios por Zona
-        # Traemos 'Precio_Prep' y 'Precio_Trans' basados en 'Descripción Zona'
-        df_final = pd.merge(df_final, df_costos, on='Descripción Zona', how='left')
+        # 1. Cruzar con Gerentes (GP)
+        resultado = pd.merge(df_carga, df_gp, on='Denominación Material', how='left')
+        resultado['QUIEN PAGA'] = resultado['GP']
 
-        # 4. CÁLCULOS MATEMÁTICOS (Multiplicación por Bultos)
-        # Rellenamos bultos vacíos con 0 para evitar errores
-        df_final['Bultos'] = df_final['Bultos'].fillna(0)
-        
-        # Totales
-        df_final['TOTAL PREPARACION'] = df_final['Precio_Prep'] * df_final['Bultos']
-        df_final['TOTAL TRANSPORTE'] = df_final['Precio_Trans'] * df_final['Bultos']
-        
-        # Gran Total
-        df_final['TOTAL A PAGAR'] = df_final['TOTAL PREPARACION'] + df_final['TOTAL TRANSPORTE']
+        # 2. Cruzar con Costos por Zona
+        resultado = pd.merge(resultado, df_costos, on='Descripción Zona', how='left')
 
-        # 5. Ordenar columnas como en tu imagen (opcional)
-        columnas_ordenadas = [
-            'Denominación Material', 'GP', 'QUIEN PAGA', 'Precio_Prep', 
-            'TOTAL PREPARACION', 'Precio_Trans', 'TOTAL TRANSPORTE', 
-            'TOTAL A PAGAR', 'Descripción Zona', 'Bultos'
-        ]
-        # Solo mostramos las que existan para evitar errores
-        cols_presentes = [c for c in columnas_ordenadas if c in df_final.columns]
-        
-        st.success("✅ Procesado correctamente")
-        st.dataframe(df_final[cols_presentes])
+        # 3. Cálculos Automáticos
+        resultado['Bultos'] = pd.to_numeric(resultado['Bultos'], errors='coerce').fillna(0)
+        resultado['Precio_Prep'] = pd.to_numeric(resultado['Precio_Prep'], errors='coerce').fillna(0)
+        resultado['Precio_Trans'] = pd.to_numeric(resultado['Precio_Trans'], errors='coerce').fillna(0)
 
-        # Botón de descarga
+        # Multiplicación solicitada
+        resultado['TOTAL PREPARACION'] = resultado['Precio_Prep'] * resultado['Bultos']
+        resultado['TOTAL TRANSPORTE'] = resultado['Precio_Trans'] * resultado['Bultos']
+        resultado['TOTAL A PAGAR'] = resultado['TOTAL PREPARACION'] + resultado['TOTAL TRANSPORTE']
+
+        # Mostrar resultados en pantalla
+        st.success("¡Procesado! Aquí tienes una vista previa:")
+        st.dataframe(resultado.head(20))
+
+        # Crear el archivo de descarga
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df_final.to_excel(writer, index=False, sheet_name='Resultado')
+            resultado.to_excel(writer, index=False, sheet_name='Reporte_Calculado')
         
         st.download_button(
-            label="📥 Descargar Excel Procesado",
+            label="📥 Descargar Excel con Totales",
             data=output.getvalue(),
-            file_name="Logistica_Calculada.xlsx",
+            file_name="Resultado_Logistica.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
     except Exception as e:
-        st.error(f"Error: Asegúrate de que las pestañas y columnas tengan los nombres correctos. Detalle: {e}")
+        st.error(f"Revisa el archivo. Error detectado: {e}")
