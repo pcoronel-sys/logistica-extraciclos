@@ -1,4 +1,4 @@
 pandas
 openpyxl
 streamlit
-altair
+altair==5.2.0
