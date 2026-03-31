@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 from io import BytesIO
 
-# Configuración visual
 st.set_page_config(page_title="Motor Logístico Extra", layout="wide")
 
 st.title("🚀 Procesador de Logística y Asignación de GP")
@@ -13,68 +12,57 @@ archivo_subido = st.file_uploader("Selecciona el archivo Excel", type=['xlsx'])
 if archivo_subido:
     try:
         # 1. LEER PESTAÑAS
-        df_carga = pd.read_excel(archivo_subido, sheet_name='Carga')
-        df_gp = pd.read_excel(archivo_subido, sheet_name='Maestro_GP')
-        df_costos = pd.read_excel(archivo_subido, sheet_name='Maestro_Costos')
+        xls = pd.ExcelFile(archivo_subido)
+        df_carga = pd.read_excel(xls, 'Carga')
+        df_gp = pd.read_excel(xls, 'Maestro_GP')
+        df_costos = pd.read_excel(xls, 'Maestro_Costos')
 
-        # 2. LIMPIEZA DE DATOS (Nombres de columnas y espacios)
-        for df in [df_carga, df_gp, df_costos]:
-            df.columns = df.columns.str.strip()
-        
-        # Estandarizar claves para que el cruce sea perfecto
-        df_carga['Denominación Material'] = df_carga['Denominación Material'].astype(str).str.strip()
-        df_gp['Denominación Material'] = df_gp['Denominación Material'].astype(str).str.strip()
-        
-        df_carga['Descripción Zona'] = df_carga['Descripción Zona'].astype(str).str.strip()
-        df_costos['Descripción Zona'] = df_costos['Descripción Zona'].astype(str).str.strip()
+        # 2. LIMPIEZA EXTREMA DE COLUMNAS
+        # Esto quita espacios vacíos y pone todo en MAYÚSCULAS para evitar errores
+        df_carga.columns = df_carga.columns.str.strip().str.upper()
+        df_gp.columns = df_gp.columns.str.strip().str.upper()
+        df_costos.columns = df_costos.columns.str.strip().str.upper()
 
-        # 3. CRUCE PARA ASIGNAR GERENTE (GP)
-        # Buscamos por 'Denominación Material' para traer la columna 'GP'
-        resultado = pd.merge(df_carga, df_gp[['Denominación Material', 'GP']], on='Denominación Material', how='left')
+        # Estandarizar los datos internos (mayúsculas y sin espacios)
+        df_carga['DENOMINACIÓN MATERIAL'] = df_carga['DENOMINACIÓN MATERIAL'].astype(str).str.strip().str.upper()
+        df_gp['DENOMINACIÓN MATERIAL'] = df_gp['DENOMINACIÓN MATERIAL'].astype(str).str.strip().str.upper()
         
-        # Llenar la columna 'QUIEN PAGA' con el valor de 'GP'
+        df_carga['DESCRIPCIÓN ZONA'] = df_carga['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
+        df_costos['DESCRIPCIÓN ZONA'] = df_costos['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
+
+        # 3. CRUCE PARA GP
+        # Buscamos por la denominación para traer al GP
+        resultado = pd.merge(df_carga, df_gp[['DENOMINACIÓN MATERIAL', 'GP']], on='DENOMINACIÓN MATERIAL', how='left')
         resultado['QUIEN PAGA'] = resultado['GP']
 
-        # 4. CRUCE PARA ASIGNAR COSTOS POR ZONA
-        # Buscamos por 'Descripción Zona' para traer 'PREPARACION' y 'TRANSPORTE' unitarios
-        resultado = pd.merge(resultado, df_costos, on='Descripción Zona', how='left')
+        # 4. CRUCE PARA COSTOS
+        # Aquí traemos PREPARACION y TRANSPORTE unitarios
+        resultado = pd.merge(resultado, df_costos[['DESCRIPCIÓN ZONA', 'PREPARACION', 'TRANSPORTE']], on='DESCRIPCIÓN ZONA', how='left')
 
-        # 5. CÁLCULOS MATEMÁTICOS (Valor Unitario x Bultos)
-        # Aseguramos que 'Bultos' y los precios sean números
-        resultado['Bultos'] = pd.to_numeric(resultado['Bultos'], errors='coerce').fillna(0)
+        # 5. CÁLCULOS
+        resultado['BULTOS'] = pd.to_numeric(resultado['BULTOS'], errors='coerce').fillna(0)
         resultado['PREPARACION'] = pd.to_numeric(resultado['PREPARACION'], errors='coerce').fillna(0)
         resultado['TRANSPORTE'] = pd.to_numeric(resultado['TRANSPORTE'], errors='coerce').fillna(0)
 
-        # Calculamos los totales
-        resultado['TOTAL PREPARACION'] = resultado['PREPARACION'] * resultado['Bultos']
-        resultado['TOTAL TRANSPORTE'] = resultado['TRANSPORTE'] * resultado['Bultos']
+        resultado['TOTAL PREPARACION'] = resultado['PREPARACION'] * resultado['BULTOS']
+        resultado['TOTAL TRANSPORTE'] = resultado['TRANSPORTE'] * resultado['BULTOS']
         resultado['TOTAL A PAGAR'] = resultado['TOTAL PREPARACION'] + resultado['TOTAL TRANSPORTE']
 
-        # 6. MOSTRAR RESULTADOS
-        st.success("✅ ¡Cálculos completados con éxito!")
-        
-        # Reordenar un poco para que se vea como en tu imagen original
-        columnas_finales = [
-            'Denominación Material', 'GP', 'QUIEN PAGA', 'PREPARACION', 
-            'TOTAL PREPARACION', 'TRANSPORTE', 'TOTAL TRANSPORTE', 
-            'TOTAL A PAGAR', 'Descripción Zona', 'Bultos'
-        ]
-        
-        # Mostrar solo las columnas que existan en el resultado final
-        st.dataframe(resultado[[c for c in columnas_finales if c in resultado.columns]])
+        st.success("✅ ¡Motor ejecutado con éxito!")
+        st.dataframe(resultado.head(20))
 
-        # 7. BOTÓN DE DESCARGA
+        # 6. BOTÓN DE DESCARGA
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            resultado.to_excel(writer, index=False, sheet_name='Resultado_Final')
+            resultado.to_excel(writer, index=False, sheet_name='Resultado')
         
         st.download_button(
-            label="📥 Descargar Excel Procesado",
+            label="📥 Descargar Excel Finalizado",
             data=output.getvalue(),
-            file_name="Reporte_Logistica_Final.xlsx",
+            file_name="Logistica_Procesada.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
     except Exception as e:
-        st.error(f"Ocurrió un error al procesar: {e}")
-        st.info("Revisa que los nombres de las pestañas sean: Carga, Maestro_GP y Maestro_Costos")
+        st.error(f"Error detectado: {e}")
+        st.warning("Asegúrate de que las columnas en 'Maestro_Costos' se llamen exactamente: DESCRIPCIÓN ZONA, PREPARACION, TRANSPORTE")
