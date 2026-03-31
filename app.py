@@ -1,131 +1,109 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
-import plotly.express as px
 
 # 1. CONFIGURACIÓN DE PÁGINA
-st.set_page_config(page_title="Logística Bagó Intelligence", layout="wide", page_icon="🧪")
+st.set_page_config(page_title="Logística Bagó Pro", layout="wide", page_icon="🧪")
 
-# --- ESTILO CORPORATIVO BLANCO Y MAGENTA ---
+# --- ESTILO MINIMALISTA BLANCO Y MAGENTA ---
 st.markdown("""
     <style>
     .stApp { background-color: #ffffff; }
-    
-    /* Tarjetas de Métricas */
     div[data-testid="stMetric"] {
-        background: #ffffff;
-        border-radius: 12px;
-        border: 1px solid #f0f0f0;
-        border-top: 5px solid #E10078;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.02);
-        padding: 20px !important;
+        background: #fdfdfd;
+        border-radius: 10px;
+        border: 1px solid #eeeeee;
+        border-top: 4px solid #E10078;
+        padding: 15px !important;
     }
-
-    /* Botones dinámicos */
     .stButton>button {
-        background: linear-gradient(90deg, #E10078 0%, #8E004C 100%);
-        color: white; border-radius: 10px; border: none;
-        font-weight: bold; height: 3em; width: 100%;
-        transition: 0.3s;
-    }
-    .stButton>button:hover {
-        transform: scale(1.02);
-        box-shadow: 0 5px 15px rgba(225, 0, 120, 0.4);
+        background-color: #E10078;
+        color: white;
+        border-radius: 8px;
+        font-weight: 600;
+        width: 100%;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- CABECERA ---
-col_logo, col_tit = st.columns([1, 4])
-with col_logo:
-    st.image("https://www.bago.com.ec/wp-content/uploads/2021/05/logo-bago.png", width=120)
-with col_tit:
-    st.title("Control de Liquidación Logística")
-    st.caption("Laboratorios Bagó del Ecuador S.A. | Gestión de Extra-Ciclos")
+st.image("https://www.bago.com.ec/wp-content/uploads/2021/05/logo-bago.png", width=150)
+st.title("📊 Control de Liquidación Logística")
 
-archivo = st.file_uploader("", type=['xlsx'])
+archivo = st.file_uploader("📂 Cargar archivo Excel", type=['xlsx'])
 
 if archivo:
     try:
-        # --- CARGA Y NORMALIZACIÓN ---
         xls = pd.ExcelFile(archivo)
         df_carga = pd.read_excel(xls, 'Carga')
         df_gp = pd.read_excel(xls, 'Maestro_GP')
         df_costos = pd.read_excel(xls, 'Maestro_Costos')
 
-        # Función de limpieza profunda
-        def clean_all(df):
+        for df in [df_carga, df_gp, df_costos]:
             df.columns = df.columns.str.strip().str.upper()
-            return df.apply(lambda x: x.str.strip().str.upper() if x.dtype == "object" else x)
 
-        df_carga = clean_all(df_carga)
-        df_gp = clean_all(df_gp)
-        df_costos = clean_all(df_costos)
+        def clean_txt(s): return s.astype(str).str.strip().str.upper()
+        def clean_num(s): return pd.to_numeric(s, errors='coerce').fillna(0)
 
-        # Limpieza de códigos (quitar .0 de Excel)
-        df_carga['CODIGO'] = df_carga['CODIGO'].astype(str).str.replace('.0', '', regex=False)
-        col_id_gp = [c for c in df_gp.columns if 'CODIGO' in c][0]
-        df_gp[col_id_gp] = df_gp[col_id_gp].astype(str).str.replace('.0', '', regex=False)
-
-        # --- PROCESAMIENTO DE CRUCES ---
-        # Cruce con Gerentes
-        res = pd.merge(df_carga, df_gp[[col_id_gp, 'GP', 'TIPO']], left_on='CODIGO', right_on=col_id_gp, how='left')
+        df_carga['CODIGO'] = clean_txt(df_carga['CODIGO']).str.replace('.0', '', regex=False)
+        col_ref_gp = [c for c in df_gp.columns if 'CODIGO' in c][0]
+        df_gp[col_ref_gp] = clean_txt(df_gp[col_ref_gp]).str.replace('.0', '', regex=False)
         
-        # Cruce con Costos
+        res = pd.merge(df_carga, df_gp[[col_ref_gp, 'GP', 'TIPO']], left_on='CODIGO', right_on=col_ref_gp, how='left')
+        
         df_costos = df_costos.rename(columns={'PRECIO_PREP': 'PREPARACION', 'PRECIO_TRANS': 'TRANSPORTE'})
+        res['DESCRIPCIÓN ZONA'] = clean_txt(res['DESCRIPCIÓN ZONA'])
+        df_costos['DESCRIPCIÓN ZONA'] = clean_txt(df_costos['DESCRIPCIÓN ZONA'])
         res = pd.merge(res, df_costos[['DESCRIPCIÓN ZONA', 'PREPARACION', 'TRANSPORTE']], on='DESCRIPCIÓN ZONA', how='left')
 
-        # Cálculos de Totales
-        res['BULTOS'] = pd.to_numeric(res['BULTOS'], errors='coerce').fillna(0)
-        res['LOG_TOT'] = (pd.to_numeric(res['PREPARACION'], errors='coerce').fillna(0) + 
-                          pd.to_numeric(res['TRANSPORTE'], errors='coerce').fillna(0)) * res['BULTOS']
+        res['BULTOS'] = clean_num(res['BULTOS'])
+        res['LOG_TOT'] = (clean_num(res['PREPARACION']) + clean_num(res['TRANSPORTE'])) * res['BULTOS']
 
-        # --- PANEL LATERAL (FILTROS) ---
-        st.sidebar.image("https://www.bago.com.ec/wp-content/uploads/2021/05/logo-bago.png", width=100)
-        st.sidebar.header("Opciones de Visualización")
-        
-        gp_list = ["TODOS"] + sorted(res['GP'].dropna().unique().tolist())
-        sel_gp = st.sidebar.selectbox("Filtrar por Gerente", gp_list)
-        
-        tipo_list = ["AMBOS", "MM", "MP"]
-        sel_tipo = st.sidebar.radio("Tipo de Material", tipo_list)
+        # --- FILTROS ---
+        st.sidebar.header("⚙️ Filtros")
+        lista_gp = ["TODOS"] + sorted(res['GP'].dropna().unique().tolist())
+        gp_sel = st.sidebar.selectbox("Seleccionar Gerente (GP)", lista_gp)
 
-        # Aplicar Filtros
-        filt = res.copy()
-        if sel_gp != "TODOS": filt = filt[filt['GP'] == sel_gp]
-        if sel_tipo != "AMBOS": filt = filt[filt['TIPO'] == sel_tipo]
+        res_filtered = res if gp_sel == "TODOS" else res[res['GP'] == gp_sel]
 
-        # --- MÉTRICAS PRINCIPALES ---
-        mm_val = filt[filt['TIPO'] == 'MM']['LOG_TOT'].sum()
-        mp_val = filt[filt['TIPO'] == 'MP']['LOG_TOT'].sum()
+        # --- CÁLCULOS ---
+        sum_tipo = res_filtered.groupby('TIPO')['LOG_TOT'].sum()
+        mm_val = sum_tipo.get('MM', 0)
+        mp_val = sum_tipo.get('MP', 0)
         subtotal = mm_val + mp_val
         iva = subtotal * 0.15
-        total_gen = subtotal + iva
+        total = subtotal + iva
 
-        st.markdown("### 📊 Indicadores Clave")
+        # --- VISUALIZACIÓN ---
+        st.markdown('---')
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("LOGÍSTICA MM", f"$ {mm_val:,.2f}")
         c2.metric("LOGÍSTICA MP", f"$ {mp_val:,.2f}")
         c3.metric("IVA (15%)", f"$ {iva:,.2f}")
-        c4.metric("TOTAL A PAGAR", f"$ {total_gen:,.2f}")
+        c4.metric("TOTAL GP", f"$ {total:,.2f}")
 
-        # --- GRÁFICOS E INTELIGENCIA ---
-        st.markdown("---")
-        g1, g2 = st.columns([1, 2])
+        col_inf, col_tab = st.columns([1, 2])
+        with col_inf:
+            st.markdown("### 📊 Distribución de Gasto")
+            porcentaje_mm = (mm_val / subtotal) if subtotal > 0 else 0
+            st.write(f"MM: {porcentaje_mm:.1%}")
+            st.progress(porcentaje_mm)
+            st.write(f"MP: {1-porcentaje_mm:.1%}")
+            st.progress(1-porcentaje_mm)
 
-        with g1:
-            st.markdown("#### Distribución de Gasto")
-            if subtotal > 0:
-                fig = px.pie(values=[mm_val, mp_val], names=['MM', 'MP'], 
-                             color_discrete_sequence=['#E10078', '#004a99'], hole=0.5)
-                fig.update_layout(margin=dict(t=0, b=0, l=0, r=0))
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("No hay datos para graficar")
+        with col_tab:
+            st.markdown(f"### 📋 Liquidación: {gp_sel}")
+            resumen_gp = res_filtered.groupby(['GP', 'TIPO'])['LOG_TOT'].sum().unstack(fill_value=0).reset_index()
+            resumen_gp['SUBTOTAL'] = resumen_gp.get('MM', 0) + resumen_gp.get('MP', 0)
+            resumen_gp['IVA 15%'] = resumen_gp['SUBTOTAL'] * 0.15
+            resumen_gp['TOTAL'] = resumen_gp['SUBTOTAL'] + resumen_gp['IVA 15%']
+            st.dataframe(resumen_gp.style.format(precision=2), use_container_width=True)
 
-        with g2:
-            st.markdown(f"#### Resumen Consolidado: {sel_gp}")
-            # Cuadro resumen dinámico
-            summary = filt.groupby(['GP', 'TIPO'])['LOG_TOT'].sum().unstack(fill_value=0).reset_index()
-            for col in ['MM', 'MP']: 
-                if col not in summary.columns: summary[col] = 0.
+        # --- DESCARGA ---
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            resumen_gp.to_excel(writer, index=False, sheet_name='Liquidacion')
+            res.to_excel(writer, index=False, sheet_name='Detalle')
+        st.download_button("📥 DESCARGAR EXCEL", data=output.getvalue(), file_name="Liquidacion_Bago.xlsx", use_container_width=True)
+
+    except Exception as e:
+        st.error(f"Error: {e}")
