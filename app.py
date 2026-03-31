@@ -3,40 +3,58 @@ import pandas as pd
 from io import BytesIO
 
 # 1. CONFIGURACIÓN DE PÁGINA
-st.set_page_config(page_title="Logística Extra-Ciclos", layout="wide", page_icon="🚚")
+st.set_page_config(page_title="Logística Bagó Extra-Ciclos", layout="wide", page_icon="📦")
 
-# CSS para Colores Corporativos y Estilo
+# CSS para Estilo Bagó (Azul y Blanco)
 st.markdown("""
     <style>
-    .main {
-        background-color: #f0f2f6;
-    }
+    .main { background-color: #f8f9fa; }
     .stMetric {
         background-color: #ffffff;
         padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        border-top: 4px solid #004a99;
+    }
+    .bienvenida {
+        text-align: center;
+        padding: 40px;
+        background-color: #004a99;
+        color: white;
         border-radius: 15px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        border-left: 5px solid #004a99; /* Azul Corporativo */
-    }
-    h1 {
-        color: #004a99;
-    }
-    div[data-testid="stExpander"] {
-        background-color: white;
-        border-radius: 10px;
+        margin-bottom: 30px;
     }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🚚 Sistema de Liquidación Logística")
+# --- PANTALLA DE INICIO (ESTADO SIN ARCHIVO) ---
+if 'archivo_subido' not in st.session_state:
+    st.markdown("""
+        <div class="bienvenida">
+            <h1>🚀 Sistema de Liquidación Logística</h1>
+            <p>Bienvenido al procesador de extra-ciclos. Optimiza tus reportes de MM y MP en segundos.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    col_info1, col_info2, col_info3 = st.columns(3)
+    with col_info1:
+        st.subheader("1. Carga")
+        st.write("Sube el archivo Excel con las pestañas: *Carga*, *Maestro_GP* y *Maestro_Costos*.")
+    with col_info2:
+        st.subheader("2. Procesa")
+        st.write("El sistema limpia códigos, cruza zonas y calcula el IVA del 15% automáticamente.")
+    with col_info3:
+        st.subheader("3. Descarga")
+        st.write("Obtén tu reporte consolidado horizontal listo para contabilidad.")
+
 st.markdown("---")
+archivo = st.file_uploader("📂 Selecciona el archivo Excel de Extra-Ciclos", type=['xlsx'])
 
-archivo_subido = st.file_uploader("📂 Arrastra tu archivo Excel aquí", type=['xlsx'])
-
-if archivo_subido:
+if archivo:
+    st.session_state['archivo_subido'] = True
     try:
         # --- PROCESAMIENTO ---
-        xls = pd.ExcelFile(archivo_subido)
+        xls = pd.ExcelFile(archivo)
         df_carga = pd.read_excel(xls, 'Carga')
         df_gp = pd.read_excel(xls, 'Maestro_GP')
         df_costos = pd.read_excel(xls, 'Maestro_Costos')
@@ -77,45 +95,36 @@ if archivo_subido:
         df_final['IVA 15%'] = df_final['SUBTOTAL'] * 0.15
         df_final['TOTAL'] = df_final['SUBTOTAL'] + df_final['IVA 15%']
 
-        # --- VISUAL: MÉTRICAS RESALTADAS ---
-        st.subheader("📌 Resumen de Gastos Generales")
+        # --- PANEL DE RESULTADOS ---
+        st.success("✅ Archivo procesado con éxito")
+        
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Logística MM", f"$ {df_final['LOGISTICA MM'].sum():,.2f}")
         m2.metric("Logística MP", f"$ {df_final['LOGISTICA MP'].sum():,.2f}")
-        m3.metric("IVA Total (15%)", f"$ {df_final['IVA 15%'].sum():,.2f}")
-        m4.metric("GRAN TOTAL", f"$ {df_final['TOTAL'].sum():,.2f}")
+        m3.metric("IVA 15%", f"$ {df_final['IVA 15%'].sum():,.2f}")
+        m4.metric("TOTAL GENERAL", f"$ {df_final['TOTAL'].sum():,.2f}")
 
-        # --- TABLA DE LIQUIDACIÓN ---
-        st.markdown("### 📋 Cuadro de Liquidación por Gerente")
-        
-        tot_row = {'GERENTE (GP)': 'TOTALES GENERALES'}
-        for col in df_final.columns[1:]: tot_row[col] = df_final[col].sum()
-        df_disp = pd.concat([df_final, pd.DataFrame([tot_row])], ignore_index=True)
+        # Uso de Pestañas para organizar la visualización
+        tab1, tab2 = st.tabs(["📋 Cuadro de Liquidación", "🔍 Auditoría de Detalles"])
 
-        # Estilo para la tabla (Negritas en la última fila)
-        st.dataframe(df_disp.style.format({c: "$ {:,.2f}" for c in df_disp.columns if c != 'GERENTE (GP)'}), use_container_width=True)
-
-        # --- ACCIONES Y AUDITORÍA ---
-        st.markdown("---")
-        c_audit, c_down = st.columns([2, 1])
-        
-        with c_audit:
-            with st.expander("🔍 Auditoría de Datos (Ver detalle por ítem)"):
-                st.dataframe(res)
-        
-        with c_down:
+        with tab1:
+            tot_row = {'GERENTE (GP)': 'TOTALES GENERALES'}
+            for col in df_final.columns[1:]: tot_row[col] = df_final[col].sum()
+            df_disp = pd.concat([df_final, pd.DataFrame([tot_row])], ignore_index=True)
+            st.dataframe(df_disp.style.format({c: "$ {:,.2f}" for c in df_disp.columns if c != 'GERENTE (GP)'}), use_container_width=True)
+            
+            # Botón de descarga prominente
             output = BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                 df_disp.to_excel(writer, index=False, sheet_name='Liquidacion')
-                res.to_excel(writer, index=False, sheet_name='Detalle_Revision')
+                res.to_excel(writer, index=False, sheet_name='Detalle_Original')
             
-            st.download_button(
-                label="📥 Descargar Reporte Final Excel",
-                data=output.getvalue(),
-                file_name="Liquidacion_Extra_Ciclos.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
-            )
+            st.download_button(label="📥 Descargar Reporte Final Excel", data=output.getvalue(), 
+                               file_name="Liquidacion_Bagó.xlsx", use_container_width=True)
+
+        with tab2:
+            st.write("Aquí puedes revisar cada línea del archivo original cruzada con los costos:")
+            st.dataframe(res)
 
     except Exception as e:
-        st.error(f"Se produjo un error: {e}")
+        st.error(f"Error al procesar el archivo: {e}")
