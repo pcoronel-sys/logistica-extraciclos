@@ -42,4 +42,29 @@ if archivo_subido:
 
         # 4. CREAR FILA DE TOTALES AL FINAL
         # Creamos una fila vacía con la palabra "TOTALES"
-        fila_totales = pd
+        fila_totales = pd.Series(dtype='object')
+        fila_totales['DENOMINACIÓN MATERIAL'] = '--- TOTALES GENERALES ---'
+        fila_totales['TOTAL PREPARACION'] = resultado['TOTAL PREPARACION'].sum()
+        fila_totales['TOTAL TRANSPORTE'] = resultado['TOTAL TRANSPORTE'].sum()
+        fila_totales['TOTAL A PAGAR'] = resultado['TOTAL A PAGAR'].sum()
+        
+        # Unir la fila de totales al dataframe
+        df_final = pd.concat([resultado, pd.DataFrame([fila_totales])], ignore_index=True)
+
+        st.success("✅ Reporte generado con totales al final")
+        st.dataframe(df_final)
+
+        # 5. GENERAR EXCEL CON FORMATO NUMÉRICO
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_final.to_excel(writer, index=False, sheet_name='Reporte_Final')
+        
+        st.download_button(
+            label="📥 Descargar Reporte Final con Totales",
+            data=output.getvalue(),
+            file_name="Reporte_Logistica_Completo.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+    except Exception as e:
+        st.error(f"Error en el proceso: {e}")
