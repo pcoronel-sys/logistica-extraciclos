@@ -4,7 +4,7 @@ from io import BytesIO
 
 st.set_page_config(page_title="Liquidación Logística Final", layout="wide")
 
-st.title("📊 Reporte de Liquidación Logística (IVA sobre Subtotal)")
+st.title("📊 Reporte de Liquidación Logística (IVA 15%)")
 st.markdown("Consolidado por **GP** con desglose de **MM** y **MP**, e IVA calculado sobre la suma total.")
 
 archivo_subido = st.file_uploader("Sube tu archivo Excel", type=['xlsx'])
@@ -30,6 +30,7 @@ if archivo_subido:
         # 2. CRUCES Y PROCESAMIENTO
         df_gp = df_gp.drop_duplicates(subset=[col_ref_gp])
         df_costos = df_costos.drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
+        # Soporte para ambos nombres de columna posibles
         df_costos = df_costos.rename(columns={'PRECIO_PREP': 'PREPARACION', 'PRECIO_TRANS': 'TRANSPORTE'})
 
         res = pd.merge(df_carga, df_gp[[col_ref_gp, 'GP', 'TIPO']], left_on='CODIGO', right_on=col_ref_gp, how='left')
@@ -49,24 +50,24 @@ if archivo_subido:
         pivot = grouped.pivot(index='GP', columns='TIPO', values='LOGISTICA_TOTAL').fillna(0)
         pivot = pivot.reset_index()
 
-        # 5. CONSTRUCCIÓN DEL CUADRO FINAL
+        # 5. CONSTRUCCIÓN DEL CUADRO FINAL (Horizontal)
         df_final = pd.DataFrame()
         df_final['GERENTE (GP)'] = pivot['GP']
         
-        # Columnas de Logística MM y MP
+        # Columnas de Logística puras
         df_final['LOGISTICA MM'] = pivot['MM'] if 'MM' in pivot.columns else 0.0
         df_final['LOGISTICA MP'] = pivot['MP'] if 'MP' in pivot.columns else 0.0
         
-        # SUBTOTAL (Suma de MM + MP)
+        # SUBTOTAL NETO (Suma de las dos logísticas)
         df_final['SUBTOTAL NETO'] = df_final['LOGISTICA MM'] + df_final['LOGISTICA MP']
         
-        # IVA SOBRE EL SUBTOTAL
+        # IVA 15% SOBRE EL SUBTOTAL
         df_final['IVA 15%'] = df_final['SUBTOTAL NETO'] * 0.15
         
-        # TOTAL A FACTURAR
+        # TOTAL A FACTURAR POR GP
         df_final['TOTAL A FACTURAR'] = df_final['SUBTOTAL NETO'] + df_final['IVA 15%']
 
-        # Fila de Totales Generales al final
+        # Fila de Totales Generales al final del cuadro
         totales_dict = {'GERENTE (GP)': '--- TOTALES GENERALES ---'}
         for col in df_final.columns[1:]:
             totales_dict[col] = df_final[col].sum()
@@ -77,17 +78,17 @@ if archivo_subido:
         st.subheader("📋 Cuadro Consolidado de Liquidación")
         st.table(df_reporte.style.format({c: "$ {:,.2f}" for c in df_reporte.columns if c != 'GERENTE (GP)'}))
 
-        # Mantener el detalle de lo que se subió
+        # Mantener el detalle de la carga procesada
         with st.expander("Ver detalle de carga procesada (Ítem por ítem)"):
             st.dataframe(res)
 
-        # 7. EXCEL
+        # 7. GENERAR ARCHIVO EXCEL
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df_reporte.to_excel(writer, index=False, sheet_name='Liquidacion_Consolidada')
             res.to_excel(writer, index=False, sheet_name='Detalle_Original')
         
-        st.download_button("📥 Descargar Reporte Final", output.getvalue(), "Liquidacion_Logistica_IVA_Unificado.xlsx")
+        st.download_button("📥 Descargar Reporte Final (Formato Horizontal)", output.getvalue(), "Liquidacion_Logistica_Final.xlsx")
 
     except Exception as e:
         st.error(f"Error: {e}")
