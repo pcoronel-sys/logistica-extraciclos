@@ -2,37 +2,40 @@ import streamlit as st
 import pandas as pd
 from io import BytesIO
 
-# 1. CONFIGURACIÓN DE PÁGINA Y ESTILO
+# 1. CONFIGURACIÓN DE PÁGINA
 st.set_page_config(page_title="Logística Extra-Ciclos", layout="wide", page_icon="🚚")
 
-# CSS personalizado para mejorar la estética
+# CSS para Colores Corporativos y Estilo
 st.markdown("""
     <style>
     .main {
-        background-color: #f5f7f9;
+        background-color: #f0f2f6;
     }
     .stMetric {
         background-color: #ffffff;
-        padding: 15px;
-        border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        padding: 20px;
+        border-radius: 15px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        border-left: 5px solid #004a99; /* Azul Corporativo */
     }
-    div[data-testid="stTable"] {
+    h1 {
+        color: #004a99;
+    }
+    div[data-testid="stExpander"] {
         background-color: white;
         border-radius: 10px;
-        overflow: hidden;
     }
     </style>
-    """, unsafe_index=True)
+    """, unsafe_allow_html=True)
 
 st.title("🚚 Sistema de Liquidación Logística")
-st.info("Sube el archivo Excel para generar el resumen de Gerentes y Tipos.")
+st.markdown("---")
 
-archivo_subido = st.file_uploader("📂 Arrastra tu Excel aquí", type=['xlsx'])
+archivo_subido = st.file_uploader("📂 Arrastra tu archivo Excel aquí", type=['xlsx'])
 
 if archivo_subido:
     try:
-        # --- PROCESAMIENTO (Mantenemos tu lógica ganadora) ---
+        # --- PROCESAMIENTO ---
         xls = pd.ExcelFile(archivo_subido)
         df_carga = pd.read_excel(xls, 'Carga')
         df_gp = pd.read_excel(xls, 'Maestro_GP')
@@ -62,7 +65,7 @@ if archivo_subido:
         res['TRANSPORTE'] = clean_num(res['TRANSPORTE'])
         res['LOG_TOT'] = (res['PREPARACION'] + res['TRANSPORTE']) * res['BULTOS']
 
-        # --- CÁLCULOS DEL CUADRO ---
+        # --- CONSOLIDACIÓN ---
         grouped = res.groupby(['GP', 'TIPO'])['LOG_TOT'].sum().reset_index()
         pivot = grouped.pivot(index='GP', columns='TIPO', values='LOG_TOT').fillna(0).reset_index()
 
@@ -74,45 +77,45 @@ if archivo_subido:
         df_final['IVA 15%'] = df_final['SUBTOTAL'] * 0.15
         df_final['TOTAL'] = df_final['SUBTOTAL'] + df_final['IVA 15%']
 
-        # --- PARTE VISUAL: MÉTRICAS ---
-        st.subheader("📌 Resumen General")
+        # --- VISUAL: MÉTRICAS RESALTADAS ---
+        st.subheader("📌 Resumen de Gastos Generales")
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Logística MM", f"$ {df_final['LOGISTICA MM'].sum():,.2f}")
         m2.metric("Logística MP", f"$ {df_final['LOGISTICA MP'].sum():,.2f}")
         m3.metric("IVA Total (15%)", f"$ {df_final['IVA 15%'].sum():,.2f}")
-        m4.metric("GRAN TOTAL", f"$ {df_final['TOTAL'].sum():,.2f}", delta="A Facturar", delta_color="normal")
+        m4.metric("GRAN TOTAL", f"$ {df_final['TOTAL'].sum():,.2f}")
 
         # --- TABLA DE LIQUIDACIÓN ---
-        st.markdown("---")
-        st.subheader("📋 Cuadro de Liquidación por GP")
+        st.markdown("### 📋 Cuadro de Liquidación por Gerente")
         
-        # Totales para la tabla
         tot_row = {'GERENTE (GP)': 'TOTALES GENERALES'}
         for col in df_final.columns[1:]: tot_row[col] = df_final[col].sum()
         df_disp = pd.concat([df_final, pd.DataFrame([tot_row])], ignore_index=True)
 
-        st.table(df_disp.style.format({c: "$ {:,.2f}" for c in df_disp.columns if c != 'GERENTE (GP)'}) \
-                 .set_properties(subset=pd.IndexSlice[df_disp.index[-1], :], **{'font-weight': 'bold', 'background-color': '#f0f2f6'}))
+        # Estilo para la tabla (Negritas en la última fila)
+        st.dataframe(df_disp.style.format({c: "$ {:,.2f}" for c in df_disp.columns if c != 'GERENTE (GP)'}), use_container_width=True)
 
-        # --- AUDITORÍA Y DESCARGA ---
-        col_down1, col_down2 = st.columns(2)
-        with col_down1:
-            with st.expander("🔍 Auditoría: Ver detalle ítem por ítem"):
+        # --- ACCIONES Y AUDITORÍA ---
+        st.markdown("---")
+        c_audit, c_down = st.columns([2, 1])
+        
+        with c_audit:
+            with st.expander("🔍 Auditoría de Datos (Ver detalle por ítem)"):
                 st.dataframe(res)
         
-        with col_down2:
+        with c_down:
             output = BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                 df_disp.to_excel(writer, index=False, sheet_name='Liquidacion')
-                res.to_excel(writer, index=False, sheet_name='Detalle')
+                res.to_excel(writer, index=False, sheet_name='Detalle_Revision')
             
             st.download_button(
-                label="📥 Descargar Reporte en Excel",
+                label="📥 Descargar Reporte Final Excel",
                 data=output.getvalue(),
-                file_name="Liquidacion_Logistica.xlsx",
+                file_name="Liquidacion_Extra_Ciclos.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
 
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"Se produjo un error: {e}")
