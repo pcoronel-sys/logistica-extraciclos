@@ -5,42 +5,40 @@ from io import BytesIO
 # 1. CONFIGURACIÓN DE PÁGINA
 st.set_page_config(page_title="Logística Bagó", layout="wide", page_icon="🧪")
 
-# --- ESTILO GLASSMORPHISM Y COLORES MAGENTA ---
+# --- ESTILO GLASSMORPHISM SOBRE FONDO BLANCO ---
 st.markdown("""
     <style>
-    /* Fondo general */
+    /* Fondo Blanco Puro */
     .stApp {
-        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        background-color: #ffffff;
     }
     
-    /* Efecto Glass para tarjetas */
+    /* Efecto Glass para tarjetas sobre blanco */
     .glass-card {
-        background: rgba(255, 255, 255, 0.7);
-        backdrop-filter: blur(10px);
-        -webkit-backdrop-filter: blur(10px);
+        background: #ffffff;
         border-radius: 20px;
-        border: 1px solid rgba(255, 255, 255, 0.18);
+        border: 1px solid #f0f0f0;
         padding: 25px;
-        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.05);
         margin-bottom: 20px;
     }
 
-    /* Estilo para métricas (Glass Magenta) */
+    /* Estilo para métricas con Magenta Bagó */
     div[data-testid="stMetric"] {
-        background: rgba(225, 0, 120, 0.05);
-        backdrop-filter: blur(4px);
+        background: #ffffff;
         border-radius: 15px;
-        border-left: 5px solid #E10078; /* Magenta Bagó */
+        border-left: 5px solid #E10078 !important; /* Magenta Bagó */
+        box-shadow: 0 2px 10px rgba(0,0,0,0.03);
         padding: 15px !important;
     }
 
-    /* Botones dinámicos */
+    /* Botones dinámicos Magenta */
     .stButton>button {
         background: linear-gradient(90deg, #E10078 0%, #8E004C 100%);
         color: white;
         border-radius: 12px;
         border: none;
-        padding: 10px 25px;
+        padding: 12px 25px;
         transition: all 0.3s ease;
         font-weight: bold;
         width: 100%;
@@ -49,9 +47,10 @@ st.markdown("""
         transform: translateY(-2px);
         box-shadow: 0 5px 15px rgba(225, 0, 120, 0.4);
         color: white;
+        border: none;
     }
 
-    /* Títulos */
+    /* Títulos Bagó */
     h1, h2, h3 {
         color: #1a1a1a;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -80,13 +79,14 @@ if 'procesado' not in st.session_state:
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     col_a, col_b = st.columns([1, 2])
     with col_a:
-        st.image("https://www.bago.com.ec/wp-content/uploads/2021/05/logo-bago.png", width=200) # Logo genérico si está disponible
+        st.markdown("### 🚚 Logística")
+        st.write("Sube el reporte de bultos mensual para calcular liquidaciones.")
     with col_b:
         st.subheader("🚀 ¡Bienvenido!")
-        st.write("Sube tu archivo de extra-ciclos para procesar los gastos de MM y MP.")
+        st.write("Selecciona tu archivo Excel para iniciar el proceso de cálculo con IVA 15%.")
     st.markdown('</div>', unsafe_allow_html=True)
 
-archivo = st.file_uploader("", type=['xlsx'])
+archivo = st.file_uploader("📂 Cargar archivo Excel", type=['xlsx'])
 
 if archivo:
     st.session_state['procesado'] = True
@@ -120,8 +120,18 @@ if archivo:
         res['BULTOS'] = clean_num(res['BULTOS'])
         res['LOG_TOT'] = (clean_num(res['PREPARACION']) + clean_num(res['TRANSPORTE'])) * res['BULTOS']
 
+        # --- FILTRO DINÁMICO POR GERENTE ---
+        st.sidebar.header("🔍 Filtros")
+        lista_gp = ["TODOS"] + sorted(res['GP'].dropna().unique().tolist())
+        gp_seleccionado = st.sidebar.selectbox("Seleccionar Gerente (GP)", lista_gp)
+
+        if gp_seleccionado != "TODOS":
+            df_filtered = res[res['GP'] == gp_seleccionado]
+        else:
+            df_filtered = res
+
         # --- CÁLCULOS FINALES ---
-        grouped = res.groupby(['GP', 'TIPO'])['LOG_TOT'].sum().reset_index()
+        grouped = df_filtered.groupby(['GP', 'TIPO'])['LOG_TOT'].sum().reset_index()
         pivot = grouped.pivot(index='GP', columns='TIPO', values='LOG_TOT').fillna(0).reset_index()
 
         df_final = pd.DataFrame({'GERENTE (GP)': pivot['GP']})
@@ -133,36 +143,41 @@ if archivo:
 
         # --- INTERFAZ DE RESULTADOS ---
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-        st.subheader("📉 Resumen Ejecutivo")
+        st.subheader(f"📉 Resumen Ejecutivo: {gp_seleccionado}")
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("LOGÍSTICA MM", f"$ {df_final['LOGISTICA MM'].sum():,.2f}")
         c2.metric("LOGÍSTICA MP", f"$ {df_final['LOGISTICA MP'].sum():,.2f}")
         c3.metric("IVA 15%", f"$ {df_final['IVA 15%'].sum():,.2f}")
-        c4.metric("GRAN TOTAL", f"$ {df_final['TOTAL A FACTURAR'].sum():,.2f}")
+        c4.metric("TOTAL A FACTURAR", f"$ {df_final['TOTAL A FACTURAR'].sum():,.2f}")
         st.markdown('</div>', unsafe_allow_html=True)
 
-        tab1, tab2 = st.tabs(["📋 Liquidación GP", "🔍 Detalle Técnico"])
+        tab1, tab2 = st.tabs(["📋 Liquidación por GP", "🔍 Detalle de Carga"])
 
         with tab1:
             st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-            tot_row = {'GERENTE (GP)': 'TOTALES GENERALES'}
-            for col in df_final.columns[1:]: tot_row[col] = df_final[col].sum()
-            df_disp = pd.concat([df_final, pd.DataFrame([tot_row])], ignore_index=True)
+            # Solo mostrar totales si se ven "TODOS"
+            if gp_seleccionado == "TODOS":
+                tot_row = {'GERENTE (GP)': 'TOTALES GENERALES'}
+                for col in df_final.columns[1:]: tot_row[col] = df_final[col].sum()
+                df_disp = pd.concat([df_final, pd.DataFrame([tot_row])], ignore_index=True)
+            else:
+                df_disp = df_final
             
             st.dataframe(df_disp.style.format({c: "$ {:,.2f}" for c in df_disp.columns if c != 'GERENTE (GP)'}), use_container_width=True)
             
-            # Botón de descarga con estilo
+            # Botón de descarga
             output = BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                df_disp.to_excel(writer, index=False, sheet_name='Resumen')
-                res.to_excel(writer, index=False, sheet_name='Detalle')
+                df_final.to_excel(writer, index=False, sheet_name='Resumen')
+                res.to_excel(writer, index=False, sheet_name='Detalle_Original')
             
-            st.download_button("📥 DESCARGAR REPORTE GERENCIAL", data=output.getvalue(), file_name="Liquidacion_Bago.xlsx", use_container_width=True)
+            st.download_button("📥 DESCARGAR EXCEL COMPLETO", data=output.getvalue(), file_name="Liquidacion_Bago_Final.xlsx", use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
         with tab2:
             st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-            st.dataframe(res, use_container_width=True)
+            st.write(f"Mostrando detalle para: **{gp_seleccionado}**")
+            st.dataframe(df_filtered, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
     except Exception as e:
