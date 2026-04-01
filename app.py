@@ -6,55 +6,57 @@ from datetime import datetime
 # 1. CONFIGURACIÓN DE PÁGINA
 st.set_page_config(page_title="Gestión Bagó", layout="wide", page_icon="🧪")
 
-# --- CSS AGRESIVO PARA ELIMINAR CUADROS Y ESPACIOS SUPERIORES ---
+# --- CSS RADICAL (BORRADO TOTAL DE CABECERA Y ESPACIOS) ---
 st.markdown("""
     <style>
-    /* 1. ELIMINA EL HEADER, EL MENÚ Y EL ESPACIADO SUPERIOR DE RAÍZ */
-    header, [data-testid="stHeader"], .st-emotion-cache-18ni7ap, .st-emotion-cache-z5fcl4 {
-        display: none !important;
-        height: 0px !important;
-    }
-    
-    /* 2. QUITA EL RELLENO (PADDING) DEL CONTENEDOR PRINCIPAL */
-    .block-container {
-        padding-top: 0rem !important;
-        padding-bottom: 0rem !important;
-        margin-top: -5rem !important; /* Empuja el contenido hacia arriba */
-    }
+    /* ELIMINA ABSOLUTAMENTE TODO EL AIRE SUPERIOR */
+    [data-testid="stHeader"], header { display: none !important; }
+    .block-container { padding-top: 0rem !important; padding-bottom: 0rem !important; }
+    [data-testid="stAppViewContainer"] { margin-top: -60px !important; }
 
+    /* FONDO BLANCO LIMPIO */
     .stApp { background-color: #ffffff; }
     
-    /* 3. DISEÑO DE TABLAS CON ENCABEZADO COLOR */
+    /* ENCABEZADOS DE TABLAS (AZUL PROFUNDO) */
     [data-testid="stTable"] thead tr th {
         background-color: #2C3E50 !important;
         color: white !important;
         font-weight: bold !important;
         text-align: center !important;
+        padding: 10px !important;
     }
     
-    /* 4. LOGIN TOTALMENTE LIMPIO Y CENTRADO */
+    /* LOGIN MINI Y CENTRADO */
     .login-wrapper {
         display: flex;
         justify-content: center;
         align-items: center;
-        height: 100vh; /* Usa todo el alto de la pantalla */
-        margin-top: 5rem;
+        height: 100vh;
+        width: 100%;
     }
     
     .login-box {
-        padding: 30px;
-        border-radius: 12px;
-        background-color: #f8f9fa;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-        border: 1px solid #dee2e6;
-        width: 340px;
+        padding: 25px;
+        border-radius: 10px;
+        background-color: #ffffff;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        border: 1px solid #eeeeee;
+        width: 300px; /* Tamaño reducido */
         text-align: center;
     }
 
+    /* ACHICAR LAS LÍNEAS DE ACCESO (INPUTS) */
+    .stTextInput input {
+        height: 35px !important;
+        font-size: 14px !important;
+        text-align: center !important;
+    }
+
     .stButton>button {
-        background: linear-gradient(90deg, #2C3E50 0%, #4CA1AF 100%);
-        color: white; border-radius: 8px; border: none;
-        font-weight: bold; height: 3em; width: 100%;
+        background: #2C3E50;
+        color: white; border-radius: 6px; border: none;
+        font-weight: bold; height: 2.5em !important; width: 100%;
+        font-size: 14px !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -71,29 +73,32 @@ if not st.session_state['autenticado']:
     st.markdown('<div class="login-wrapper">', unsafe_allow_html=True)
     with st.container():
         st.markdown('<div class="login-box">', unsafe_allow_html=True)
-        st.markdown("<h2 style='color: #2C3E50; margin-bottom: 5px;'>Bagó Logística</h2>", unsafe_allow_html=True)
-        st.markdown("<p style='color: #7f8c8d; font-size: 14px;'>Acceso Protegido</p>", unsafe_allow_html=True)
+        st.markdown("<h3 style='color: #2C3E50; margin-bottom: 0;'>Bagó Logística</h3>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #bdc3c7; font-size: 12px; margin-bottom: 20px;'>Ingreso Seguro</p>", unsafe_allow_html=True)
         
-        user = st.text_input("User", label_visibility="collapsed", placeholder="Usuario")
-        password = st.text_input("Pass", type="password", label_visibility="collapsed", placeholder="Contraseña")
+        user = st.text_input("U", label_visibility="collapsed", placeholder="Usuario")
+        password = st.text_input("P", type="password", label_visibility="collapsed", placeholder="Contraseña")
         
-        if st.button("INGRESAR"):
+        if st.button("ENTRAR"):
             if user == USUARIO_PRO and password == CLAVE_PRO:
                 st.session_state['autenticado'] = True
                 st.rerun()
             else:
-                st.error("Acceso Denegado")
+                st.error("Error de acceso")
         st.markdown('</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
 
 # --- BARRA LATERAL ---
-st.sidebar.write(f"👤 Usuario: **{USUARIO_PRO}**")
+st.sidebar.write(f"👤 **{USUARIO_PRO}**")
 if st.sidebar.button("Cerrar Sesión"):
     st.session_state['autenticado'] = False
     st.rerun()
 
-# --- SISTEMA LOGÍSTICO (TODAS LAS FUNCIONES ACTIVAS) ---
+# ---------------------------------------------------------
+# SISTEMA LOGÍSTICO (TODAS LAS FUNCIONES Y SUBTOTALES)
+# ---------------------------------------------------------
+
 PATH_GP = "master_gp.csv"
 PATH_COSTOS = "master_costos.csv"
 HISTORICO_FILE = "base_historica_bago.csv"
@@ -119,7 +124,7 @@ with tabs[0]:
     else:
         c1, c2 = st.columns([1, 2])
         with c1: mes_sel = st.selectbox("Mes", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"])
-        with c2: archivo = st.file_uploader("Subir Carga Mensual", type=['xlsx', 'xls', 'csv'])
+        with c2: archivo = st.file_uploader("Subir Carga", type=['xlsx', 'xls', 'csv'])
 
         if archivo:
             df_c = leer_archivo(archivo)
@@ -153,6 +158,7 @@ with tabs[0]:
                 summary_f = pd.concat([summary, pd.DataFrame([tot])], ignore_index=True)
 
                 st.table(summary_f.style.format(precision=2).set_properties(**{'background-color': '#2C3E50', 'color': 'white', 'font-weight': 'bold'}, subset=pd.IndexSlice[summary_f.index[-1], :]))
+                
                 st.session_state['res_actual'] = res
                 st.session_state['mes_actual'] = mes_sel
                 if st.button("💾 Guardar Periodo"):
@@ -170,7 +176,7 @@ with tabs[1]:
         k1.metric("Bultos", f"{df_det['BULTOS'].sum():,.0f}")
         k2.metric("Preparación", f"$ {df_det['TOTAL PREPARACION'].sum():,.2f}")
         k3.metric("Transporte", f"$ {df_det['TOTAL TRANSPORTE'].sum():,.2f}")
-        k4.metric("Total Final", f"$ {df_det['TOTAL CON IVA'].sum():,.2f}")
+        k4.metric("Total c/ IVA", f"$ {df_det['TOTAL CON IVA'].sum():,.2f}")
         st.dataframe(df_det, use_container_width=True)
     else: st.info("Procese un archivo primero.")
 
@@ -179,14 +185,14 @@ with tabs[2]:
     st.header("⚙️ Configuración")
     ca, cb = st.columns(2)
     with ca:
-        ug = st.file_uploader("Actualizar Maestro GP", type=['xlsx', 'xls', 'csv'], key="ug")
+        ug = st.file_uploader("Actualizar GP", type=['xlsx', 'xls', 'csv'], key="ug")
         if ug:
             d = leer_archivo(ug)
             if d is not None:
                 d.columns = d.columns.str.strip().str.upper()
                 guardar_maestro(d, PATH_GP); st.success("GP Guardado.")
     with cb:
-        uc = st.file_uploader("Actualizar Maestro Costos", type=['xlsx', 'xls', 'csv'], key="uc")
+        uc = st.file_uploader("Actualizar Costos", type=['xlsx', 'xls', 'csv'], key="uc")
         if uc:
             d = leer_archivo(uc)
             if d is not None:
@@ -197,9 +203,9 @@ with tabs[2]:
 with tabs[3]:
     if os.path.exists(HISTORICO_FILE):
         h = pd.read_csv(HISTORICO_FILE)
-        with st.expander("🗑️ Borrar Mes Específico"):
+        with st.expander("🗑️ Borrar Mes"):
             m = st.selectbox("Mes a borrar:", sorted(h['MES_REPORTE'].unique()))
-            if st.button("Eliminar permanentemente"):
+            if st.button("Eliminar"):
                 h[h['MES_REPORTE'] != m].to_csv(HISTORICO_FILE, index=False)
                 st.rerun()
         st.dataframe(h, use_container_width=True)
