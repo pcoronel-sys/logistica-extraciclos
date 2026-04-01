@@ -77,13 +77,13 @@ if st.session_state['pagina_actual'] == "inicio":
     
     with col_l:
         st.markdown(f'<p class="almacen-tag"></p>', unsafe_allow_html=True)
-        if st.button("\n\n Extra Ciclos"):
+        if st.button("\n\n EXTRA CICLOS"):
             st.session_state['pagina_actual'] = "sistema" # Dirige al sistema funcional
             st.rerun()
             
     with col_r:
         st.markdown(f'<p class="almacen-tag"></p>', unsafe_allow_html=True)
-        if st.button("\n\REPRO"):
+        if st.button("\n REPROGRAMA"):
             # NO CAMBIA DE PÁGINA - Se queda en el inicio
             st.toast("Módulo en desarrollo...", icon="⚠️")
             pass 
