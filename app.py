@@ -5,146 +5,150 @@ import os
 from datetime import datetime
 
 # 1. CONFIGURACIÓN DE PÁGINA
-st.set_page_config(page_title="Logística Bagó - Control Total", layout="wide", page_icon="🧪")
+st.set_page_config(page_title="Bagó Logística Pro", layout="wide", page_icon="🧪")
 
-# --- ESTILO CORPORATIVO MAGENTA ---
+# --- ESTILO CORPORATIVO ---
 st.markdown("""
     <style>
     .stApp { background-color: #ffffff; }
-    div[data-testid="stMetric"] {
-        background: #fdfdfd;
-        border-radius: 12px;
-        border-top: 5px solid #E10078;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.02);
-    }
     .stButton>button {
         background: linear-gradient(90deg, #E10078 0%, #8E004C 100%);
         color: white; border-radius: 10px; font-weight: bold; width: 100%;
-        height: 3em;
     }
-    /* Estilo para las tablas */
-    .stDataFrame { background-color: white; border-radius: 10px; }
+    .status-box {
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
+# ARCHIVOS DE MEMORIA LOCAL
+PATH_GP = "master_gp.csv"
+PATH_COSTOS = "master_costos.csv"
 HISTORICO_FILE = "base_historica_bago.csv"
 
-# --- FUNCIÓN PARA GUARDAR BASE COMPLETA ---
-def guardar_en_base_datos(df_detalle, mes):
-    df_detalle['MES_REPORTE'] = mes
-    df_detalle['FECHA_REGISTRO'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
-    if os.path.exists(HISTORICO_FILE):
-        historico_old = pd.read_csv(HISTORICO_FILE)
-        # Limpiar posibles columnas vacías o errores de carga previa
-        nuevo_hist = pd.concat([historico_old, df_detalle], ignore_index=True)
-    else:
-        nuevo_hist = df_detalle
-    
-    nuevo_hist.to_csv(HISTORICO_FILE, index=False)
-    st.success(f"✅ La base detallada de {mes} ha sido almacenada correctamente.")
+# --- FUNCIONES DE PERSISTENCIA ---
+def guardar_maestro(df, path):
+    df.to_csv(path, index=False)
+
+def cargar_maestro(path):
+    if os.path.exists(path):
+        return pd.read_csv(path)
+    return None
 
 # --- NAVEGACIÓN ---
-st.title("📊 Control de Liquidación y Base Histórica")
-pestanas = st.tabs(["🚀 Procesar Nueva Carga", "🗄️ Base de Datos Acumulada"])
+st.title("🚀 Gestión Logística Inteligente - Bagó")
+tabs = st.tabs(["📊 Liquidación Mensual", "⚙️ Configurar Maestros", "🗄️ Historial"])
 
-with pestanas[0]:
-    col_izq, col_der = st.columns([1, 3])
-    with col_izq:
-        mes_actual = st.selectbox("Mes a Procesar", 
-            ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", 
-             "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"])
-    with col_der:
-        archivo = st.file_uploader("Subir archivo Excel", type=['xlsx'])
+# --- PESTAÑA 2: CONFIGURAR MAESTROS (PUNTO 1) ---
+with tabs[1]:
+    st.header("Actualización de Maestros")
+    st.write("Sube aquí tus archivos maestros. La App los recordará para futuras cargas.")
+    
+    c1, c2 = st.columns(2)
+    with c1:
+        st.subheader("Maestro GP / Productos")
+        u_gp = st.file_uploader("Subir Maestro GP", type=['xlsx', 'csv'], key="ugp")
+        if u_gp:
+            df_u_gp = pd.read_excel(u_gp) if u_gp.name.endswith('xlsx') else pd.read_csv(u_gp)
+            df_u_gp.columns = df_u_gp.columns.str.strip().str.upper()
+            guardar_maestro(df_u_gp, PATH_GP)
+            st.success("Maestro GP actualizado.")
 
-    if archivo:
-        try:
-            # CARGA DE HOJAS
-            xls = pd.ExcelFile(archivo)
-            df_carga = pd.read_excel(xls, 'Carga')
-            df_gp = pd.read_excel(xls, 'Maestro_GP')
-            df_costos = pd.read_excel(xls, 'Maestro_Costos')
+    with c2:
+        st.subheader("Maestro de Costos / Zonas")
+        u_costos = st.file_uploader("Subir Maestro Costos", type=['xlsx', 'csv'], key="ucostos")
+        if u_costos:
+            df_u_costos = pd.read_excel(u_costos) if u_costos.name.endswith('xlsx') else pd.read_csv(u_costos)
+            df_u_costos.columns = df_u_costos.columns.str.strip().str.upper()
+            guardar_maestro(df_u_costos, PATH_COSTOS)
+            st.success("Maestro de Costos actualizado.")
 
-            # NORMALIZACIÓN (Mayúsculas y sin espacios)
-            def normalizar(df):
-                df.columns = df.columns.str.strip().str.upper()
-                return df.apply(lambda x: x.astype(str).str.strip().str.upper() if x.name not in ['BULTOS', 'PREPARACION', 'TRANSPORTE', 'PRECIO_PREP', 'PRECIO_TRANS'] else x)
+# --- CARGAR MAESTROS EN MEMORIA ---
+m_gp = cargar_maestro(PATH_GP)
+m_costos = cargar_maestro(PATH_COSTOS)
 
-            df_carga = normalizar(df_carga)
-            df_gp = normalizar(df_gp)
-            df_costos = normalizar(df_costos)
-
-            # LIMPIEZA DE CÓDIGOS Y DUPLICADOS EN MAESTROS
-            df_carga['CODIGO'] = df_carga['CODIGO'].str.replace(r'\.0$', '', regex=True)
-            col_id = [c for c in df_gp.columns if 'CODIGO' in c][0]
-            df_gp[col_id] = df_gp[col_id].str.replace(r'\.0$', '', regex=True)
-            
-            # ELIMINAR DUPLICADOS EN MAESTROS (Evita multiplicar valores por error)
-            df_gp = df_gp.drop_duplicates(subset=[col_id])
-            df_costos = df_costos.drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
-
-            # CRUCES (JOIN)
-            res = pd.merge(df_carga, df_gp[[col_id, 'GP', 'TIPO']], left_on='CODIGO', right_on=col_id, how='left')
-            
-            # Renombrar costos si vienen con el nombre antiguo
-            df_costos = df_costos.rename(columns={'PRECIO_PREP': 'PREPARACION', 'PRECIO_TRANS': 'TRANSPORTE'})
-            res = pd.merge(res, df_costos[['DESCRIPCIÓN ZONA', 'PREPARACION', 'TRANSPORTE']], on='DESCRIPCIÓN ZONA', how='left')
-
-            # CÁLCULO FILA POR FILA (Precisión Matemática)
-            res['BULTOS'] = pd.to_numeric(res['BULTOS'], errors='coerce').fillna(0)
-            res['PREPARACION'] = pd.to_numeric(res['PREPARACION'], errors='coerce').fillna(0)
-            res['TRANSPORTE'] = pd.to_numeric(res['TRANSPORTE'], errors='coerce').fillna(0)
-            
-            # (Precio Prep + Precio Trans) * Cantidad Bultos
-            res['VALOR_LOGISTICA'] = (res['PREPARACION'] + res['TRANSPORTE']) * res['BULTOS']
-
-            # --- VISTA DE RESULTADOS ---
-            st.subheader(f"📋 Resumen de Liquidación: {mes_actual}")
-            
-            # Agrupar para el resumen visual
-            summary = res.groupby(['GP', 'TIPO'])['VALOR_LOGISTICA'].sum().unstack(fill_value=0).reset_index()
-            for c in ['MM', 'MP']: 
-                if c not in summary.columns: summary[c] = 0.0
-            
-            summary['SUBTOTAL'] = summary['MM'] + summary['MP']
-            summary['IVA 15%'] = summary['SUBTOTAL'] * 0.15
-            summary['TOTAL FINAL'] = summary['SUBTOTAL'] + summary['IVA 15%']
-
-            # AÑADIR FILA DE TOTALES AL RESUMEN (Sin dañar la base)
-            totales = {'GP': '--- TOTALES GENERALES ---'}
-            for col in summary.columns[1:]: totales[col] = summary[col].sum()
-            summary_con_totales = pd.concat([summary, pd.DataFrame([totales])], ignore_index=True)
-
-            st.dataframe(summary_con_totales.style.format(precision=2), use_container_width=True)
-
-            # BOTÓN PARA GUARDAR LA BASE COMPLETA
-            st.markdown("---")
-            if st.button(f"💾 ALMACENAR BASE DETALLADA DE {mes_actual.upper()}"):
-                guardar_en_base_datos(res, mes_actual)
-
-        except Exception as e:
-            st.error(f"Se detectó un error en el archivo: {e}")
-
-with pestanas[1]:
-    st.subheader("🗄️ Historial Acumulado (Base de Datos)")
-    if os.path.exists(HISTORICO_FILE):
-        base_completa = pd.read_csv(HISTORICO_FILE)
-        
-        # Filtro de Mes
-        meses_h = ["TODOS"] + sorted(base_completa['MES_REPORTE'].unique().tolist())
-        filtro_mes = st.selectbox("Ver Mes Específico", meses_h)
-        
-        df_final_ver = base_completa if filtro_mes == "TODOS" else base_completa[base_completa['MES_REPORTE'] == filtro_mes]
-        
-        st.write(f"Registros en la base: {len(df_final_ver)}")
-        st.dataframe(df_final_ver, use_container_width=True)
-        
-        # Descarga de la base completa en CSV
-        csv_data = df_final_ver.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Descargar Base de Datos Completa", csv_data, "base_historica_logistica.csv", "text/csv")
-        
-        if st.sidebar.button("⚠️ Borrar TODA la Base"):
-            os.remove(HISTORICO_FILE)
-            st.rerun()
+# --- PESTAÑA 1: LIQUIDACIÓN (CON SEMÁFORO) ---
+with tabs[0]:
+    if m_gp is None or m_costos is None:
+        st.warning("⚠️ Primero debes configurar los Maestros en la pestaña de Configuración.")
     else:
-        st.info("La base de datos está vacía. Procesa un mes y utiliza el botón 'Almacenar'.")
+        col_m, col_f = st.columns([1, 2])
+        with col_m:
+            mes_sel = st.selectbox("Mes", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"])
+        with col_f:
+            archivo_carga = st.file_uploader("Subir archivo de Carga (Bultos)", type=['xlsx'])
+
+        if archivo_carga:
+            df_c = pd.read_excel(archivo_carga)
+            df_c.columns = df_c.columns.str.strip().str.upper()
+            
+            # Normalización para validación
+            df_c['CODIGO'] = df_c['CODIGO'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+            m_gp['CODIGO'] = m_gp[m_gp.columns[0]].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+            df_c['DESCRIPCIÓN ZONA'] = df_c['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
+            m_costos['DESCRIPCIÓN ZONA'] = m_costos['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
+
+            # --- SEMÁFORO DE VALIDACIÓN ---
+            codigos_novedad = df_c[~df_c['CODIGO'].isin(m_gp['CODIGO'])]['CODIGO'].unique()
+            zonas_novedad = df_c[~df_c['DESCRIPCIÓN ZONA'].isin(m_costos['DESCRIPCIÓN ZONA'])]['DESCRIPCIÓN ZONA'].unique()
+
+            st.subheader("🚥 Semáforo de Validación")
+            v1, v2 = st.columns(2)
+            
+            error_bloqueante = False
+            
+            with v1:
+                if len(codigos_novedad) == 0:
+                    st.success("✅ Productos: Todos encontrados")
+                else:
+                    st.error(f"❌ {len(codigos_novedad)} Productos nuevos no están en el Maestro")
+                    st.write(codigos_novedad)
+                    error_bloqueante = True
+            
+            with v2:
+                if len(zonas_novedad) == 0:
+                    st.success("✅ Zonas: Todas encontradas")
+                else:
+                    st.warning(f"⚠️ {len(zonas_novedad)} Zonas sin precio definido")
+                    st.write(zonas_novedad)
+                    error_bloqueante = True
+
+            if error_bloqueante:
+                st.info("💡 Por favor, actualiza los Maestros en la pestaña 'Configurar Maestros' para continuar.")
+            else:
+                # --- PROCESAMIENTO SI TODO ESTÁ OK ---
+                res = pd.merge(df_c, m_gp[['CODIGO', 'GP', 'TIPO']], on='CODIGO', how='left')
+                m_costos = m_costos.rename(columns={'PRECIO_PREP': 'PREPARACION', 'PRECIO_TRANS': 'TRANSPORTE'})
+                res = pd.merge(res, m_costos[['DESCRIPCIÓN ZONA', 'PREPARACION', 'TRANSPORTE']], on='DESCRIPCIÓN ZONA', how='left')
+                
+                res['BULTOS'] = pd.to_numeric(res['BULTOS'], errors='coerce').fillna(0)
+                res['VALOR_LOGISTICA'] = (pd.to_numeric(res['PREPARACION']) + pd.to_numeric(res['TRANSPORTE'])) * res['BULTOS']
+
+                summary = res.groupby(['GP', 'TIPO'])['VALOR_LOGISTICA'].sum().unstack(fill_value=0).reset_index()
+                for c in ['MM', 'MP']: 
+                    if c not in summary.columns: summary[c] = 0.0
+                summary['SUBTOTAL'] = summary['MM'] + summary['MP']
+                summary['IVA 15%'] = summary['SUBTOTAL'] * 0.15
+                summary['TOTAL'] = summary['SUBTOTAL'] + summary['IVA 15%']
+
+                st.dataframe(summary.style.format(precision=2), use_container_width=True)
+                
+                if st.button("💾 Guardar en Histórico"):
+                    res['MES_REPORTE'] = mes_sel
+                    res['FECHA_SISTEMA'] = datetime.now()
+                    if os.path.exists(HISTORICO_FILE):
+                        pd.concat([pd.read_csv(HISTORICO_FILE), res]).to_csv(HISTORICO_FILE, index=False)
+                    else:
+                        res.to_csv(HISTORICO_FILE, index=False)
+                    st.success("Guardado.")
+
+# --- PESTAÑA 3: HISTORIAL ---
+with tabs[2]:
+    if os.path.exists(HISTORICO_FILE):
+        h_df = pd.read_csv(HISTORICO_FILE)
+        st.dataframe(h_df, use_container_width=True)
+        st.download_button("Descargar Todo el Histórico", h_df.to_csv(index=False), "historico.csv")
+    else:
+        st.info("No hay datos históricos aún.")
