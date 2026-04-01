@@ -68,12 +68,7 @@ if st.session_state['pagina_actual'] == "inicio":
             st.session_state['pagina_actual'] = "sistema"
             st.rerun()
 
-    # Secciones informativas inferiores
-    st.markdown("<br><br><br>", unsafe_allow_html=True)
-    c1, c2, c3 = st.columns(3)
-    with c1: st.info("📂 **1. Conexión**\n\nMaestros de inventario")
-    with c2: st.warning("⚡ **2. Proceso**\n\nCruce inteligente")
-    with c3: st.success("📊 **3. Auditoría**\n\nReporte final")
+ 
 
 # ---------------------------------------------------------
 # SISTEMA PRINCIPAL (TU CÓDIGO ORIGINAL INTACTO)
@@ -214,4 +209,5 @@ elif st.session_state['pagina_actual'] == "sistema":
             if st.button("❌ Eliminar Periodo"):
                 h[h['MES_REPORTE'] != m_del].to_csv(HISTORICO_FILE, index=False); st.rerun()
             st.dataframe(h, use_container_width=True)
+
 
