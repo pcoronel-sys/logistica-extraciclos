@@ -18,12 +18,14 @@ st.markdown("""
         background-color: #2C3E50 !important;
         color: white !important;
         font-weight: bold !important;
+        text-align: center !important;
     }
     div[data-testid="stMetric"] {
         background-color: #fcfcfc;
         border-left: 6px solid #4CA1AF;
         border-radius: 10px;
         padding: 15px !important;
+        box-shadow: 2px 2px 5px rgba(0,0,0,0.05);
     }
     .stButton>button {
         background: linear-gradient(90deg, #2C3E50 0%, #4CA1AF 100%);
@@ -54,22 +56,27 @@ if not st.session_state['autenticado']:
         st.markdown('</div></div>', unsafe_allow_html=True)
     st.stop()
 
-# --- BARRA LATERAL LIMPIA ---
+# --- BARRA LATERAL ---
 st.sidebar.success(f"Usuario: {USUARIO_PRO}")
 if st.sidebar.button("Cerrar Sesión"):
     st.session_state['autenticado'] = False
     st.rerun()
 
-# --- RUTAS DE ARCHIVOS ---
+# --- RUTAS Y FUNCIONES AUXILIARES ---
 PATH_GP = "master_gp.csv"
 PATH_COSTOS = "master_costos.csv"
 HISTORICO_FILE = "base_historica_bago.csv"
 
+def guardar_maestro(df, path): df.to_csv(path, index=False)
 def cargar_maestro(path): return pd.read_csv(path) if os.path.exists(path) else None
-def leer_archivo(archivo):
+
+def leer_archivo_protegido(archivo):
     try:
-        if archivo.name.lower().endswith(('.xlsx', '.xls')): return pd.read_excel(archivo)
-        return pd.read_csv(archivo, encoding='latin-1')
+        nombre_lower = archivo.name.lower()
+        if nombre_lower.endswith(('.xlsx', '.xls')): return pd.read_excel(archivo)
+        else:
+            try: return pd.read_csv(archivo, encoding='utf-8')
+            except: return pd.read_csv(archivo, encoding='latin-1')
     except: return None
 
 # --- NAVEGACIÓN ---
@@ -81,32 +88,34 @@ m_costos = cargar_maestro(PATH_COSTOS)
 
 # --- PESTAÑA 1: LIQUIDACIÓN ---
 with tabs[0]:
-    if m_gp is None or m_costos is None: st.warning("Configure maestros primero.")
+    if m_gp is None or m_costos is None: st.warning("⚠️ Cargue los maestros en la pestaña de Configuración.")
     else:
         c1, c2 = st.columns([1, 2])
         with c1: mes_sel = st.selectbox("Mes", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"])
-        with c2: archivo = st.file_uploader("Subir Excel", type=['xlsx', 'xls', 'csv'])
+        with c2: archivo_carga = st.file_uploader("Subir Carga Mensual", type=['xlsx', 'xls', 'csv'])
 
-        if archivo:
-            df = leer_archivo(archivo)
-            if df is not None:
-                df.columns = df.columns.str.strip().str.upper()
-                df['CODIGO'] = df['CODIGO'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+        if archivo_carga:
+            df_c = leer_archivo_protegido(archivo_carga)
+            if df_c is not None:
+                df_c.columns = df_c.columns.str.strip().str.upper()
+                df_c['CODIGO'] = df_c['CODIGO'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                 col_id_gp = [c for c in m_gp.columns if 'CODIGO' in c][0]
                 m_gp[col_id_gp] = m_gp[col_id_gp].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+                df_c['DESCRIPCIÓN ZONA'] = df_c['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
+                m_costos['DESCRIPCIÓN ZONA'] = m_costos['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
+
+                res = pd.merge(df_c, m_gp.drop_duplicates(subset=[col_id_gp])[[col_id_gp, 'GP', 'TIPO']], left_on='CODIGO', right_on=col_id_gp, how='left')
+                m_c_c = m_costos.rename(columns={'PRECIO_PREP': 'PREPARACION', 'PRECIO_TRANS': 'TRANSPORTE'}).drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
+                res = pd.merge(res, m_c_c[['DESCRIPCIÓN ZONA', 'PREPARACION', 'TRANSPORTE']], on='DESCRIPCIÓN ZONA', how='left')
                 
-                res = pd.merge(df, m_gp[[col_id_gp, 'GP', 'TIPO']], left_on='CODIGO', right_on=col_id_gp, how='left')
-                m_c = m_costos.rename(columns={'PRECIO_PREP': 'PREPARACION', 'PRECIO_TRANS': 'TRANSPORTE'})
-                res = pd.merge(res, m_c[['DESCRIPCIÓN ZONA', 'PREPARACION', 'TRANSPORTE']], on='DESCRIPCIÓN ZONA', how='left')
-                
-                for c in ['BULTOS', 'PREPARACION', 'TRANSPORTE']: res[c] = pd.to_numeric(res[c], errors='coerce').fillna(0)
+                for col in ['BULTOS', 'PREPARACION', 'TRANSPORTE']: res[col] = pd.to_numeric(res[col], errors='coerce').fillna(0)
                 res['TOTAL PREPARACION'] = res['PREPARACION'] * res['BULTOS']
                 res['TOTAL TRANSPORTE'] = res['TRANSPORTE'] * res['BULTOS']
                 res['VALOR_LOGISTICA'] = res['TOTAL PREPARACION'] + res['TOTAL TRANSPORTE']
                 res['IVA 15%'] = res['VALOR_LOGISTICA'] * 0.15
                 res['TOTAL CON IVA'] = res['VALOR_LOGISTICA'] + res['IVA 15%']
 
-                st.subheader(f"Reporte: {mes_sel}")
+                st.subheader(f"📋 Reporte Consolidado: {mes_sel}")
                 summary = res.groupby(['GP', 'TIPO'])['VALOR_LOGISTICA'].sum().unstack(fill_value=0).reset_index()
                 for c in ['MM', 'MP']: 
                     if c not in summary.columns: summary[c] = 0.0
@@ -114,52 +123,63 @@ with tabs[0]:
                 summary['IVA 15%'] = summary['SUBTOTAL'] * 0.15
                 summary['TOTAL'] = summary['SUBTOTAL'] + summary['IVA 15%']
 
-                st.table(summary.style.format(precision=2))
+                tot = {'GP': '--- TOTAL GENERAL ---'}
+                for col in summary.columns[1:]: tot[col] = summary[col].sum()
+                summary_final = pd.concat([summary, pd.DataFrame([tot])], ignore_index=True)
+
+                st.table(summary_final.style.format(precision=2).set_properties(**{'background-color': '#2C3E50', 'color': 'white', 'font-weight': 'bold'}, subset=pd.IndexSlice[summary_final.index[-1], :]))
                 st.session_state['res_actual'] = res
                 st.session_state['mes_actual'] = mes_sel
                 if st.button(f"💾 Guardar Periodo {mes_sel}"):
                     res['MES_REPORTE'] = mes_sel
                     res['FECHA_REGISTRO'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     pd.concat([pd.read_csv(HISTORICO_FILE) if os.path.exists(HISTORICO_FILE) else pd.DataFrame(), res], ignore_index=True).to_csv(HISTORICO_FILE, index=False)
-                    st.success("Guardado.")
+                    st.success("Guardado en Histórico.")
 
 # --- PESTAÑA 2: DETALLE ---
 with tabs[1]:
     if 'res_actual' in st.session_state:
-        df_v = st.session_state['res_actual']
-        st.subheader(f"Auditoría - {st.session_state['mes_actual']}")
+        df_det = st.session_state['res_actual'].copy()
+        st.subheader(f"📑 Auditoría - {st.session_state['mes_actual']}")
         k1, k2, k3, k4, k5 = st.columns(5)
-        k1.metric("Bultos", f"{df_v['BULTOS'].sum():,.0f}")
-        k2.metric("Prep.", f"$ {df_v['TOTAL PREPARACION'].sum():,.2f}")
-        k3.metric("Trans.", f"$ {df_v['TOTAL TRANSPORTE'].sum():,.2f}")
-        k4.metric("Neto", f"$ {df_v['VALOR_LOGISTICA'].sum():,.2f}")
-        k5.metric("Total IVA", f"$ {df_v['TOTAL CON IVA'].sum():,.2f}")
+        k1.metric("Bultos", f"{df_det['BULTOS'].sum():,.0f}")
+        k2.metric("Prep.", f"$ {df_det['TOTAL PREPARACION'].sum():,.2f}")
+        k3.metric("Trans.", f"$ {df_det['TOTAL TRANSPORTE'].sum():,.2f}")
+        k4.metric("Neto", f"$ {df_det['VALOR_LOGISTICA'].sum():,.2f}")
+        k5.metric("Total IVA", f"$ {df_det['TOTAL CON IVA'].sum():,.2f}")
+        
+        bus = st.text_input("🔍 Buscar:", "").upper()
+        df_v = df_det[df_det.astype(str).apply(lambda x: x.str.contains(bus)).any(axis=1)] if bus else df_det
         st.dataframe(df_v, use_container_width=True)
-    else: st.info("Sin datos.")
+    else: st.info("Procese un archivo primero.")
 
-# --- PESTAÑA 3: CONFIG ---
+# --- PESTAÑA 3: CONFIGURACIÓN (RESTAURADA) ---
 with tabs[2]:
-    st.header("Configuración de Maestros")
-    # Lógica de carga de maestros omitida por brevedad (igual a la anterior)
+    st.header("⚙️ Configuración de Bases Maestras")
+    col_a, col_b = st.columns(2)
+    with col_a:
+        u_gp = st.file_uploader("Actualizar Maestro GP", type=['xlsx', 'xls', 'csv'], key="ugp")
+        if u_gp:
+            df_ugp = leer_archivo_protegido(u_gp)
+            if df_ugp is not None:
+                df_ugp.columns = df_ugp.columns.str.strip().str.upper()
+                guardar_maestro(df_ugp, PATH_GP); st.success("✅ Maestro GP guardado.")
+    with col_b:
+        u_costos = st.file_uploader("Actualizar Maestro Costos", type=['xlsx', 'xls', 'csv'], key="ucostos")
+        if u_costos:
+            df_ucostos = leer_archivo_protegido(u_costos)
+            if df_ucostos is not None:
+                df_ucostos.columns = df_ucostos.columns.str.strip().str.upper()
+                guardar_maestro(df_ucostos, PATH_COSTOS); st.success("✅ Maestro de Costos guardado.")
 
-# --- PESTAÑA 4: HISTORIAL Y ELIMINACIÓN ---
+# --- PESTAÑA 4: HISTORIAL ---
 with tabs[3]:
-    st.header("🗄️ Historial de Reportes")
     if os.path.exists(HISTORICO_FILE):
         h_df = pd.read_csv(HISTORICO_FILE)
-        
-        # --- SECCIÓN ELIMINAR ---
-        with st.expander("🗑️ Zona de Peligro: Eliminar Datos"):
-            meses_disp = sorted(h_df['MES_REPORTE'].unique())
-            mes_a_borrar = st.selectbox("Seleccione el mes que desea ELIMINAR:", meses_disp)
-            if st.button(f"Confirmar Eliminación de {mes_a_borrar}"):
-                nuevo_h = h_df[h_df['MES_REPORTE'] != mes_a_borrar]
-                nuevo_h.to_csv(HISTORICO_FILE, index=False)
-                st.error(f"Se han eliminado todos los registros de {mes_a_borrar}.")
+        with st.expander("🗑️ Eliminar Reporte por Mes"):
+            m_del = st.selectbox("Mes a borrar:", sorted(h_df['MES_REPORTE'].unique()))
+            if st.button("Eliminar permanentemente"):
+                h_df[h_df['MES_REPORTE'] != m_del].to_csv(HISTORICO_FILE, index=False)
                 st.rerun()
-
-        st.markdown("---")
-        st.subheader("Registros Almacenados")
         st.dataframe(h_df, use_container_width=True)
-    else:
-        st.info("No hay datos históricos grabados.")
+    else: st.info("Sin historial.")
