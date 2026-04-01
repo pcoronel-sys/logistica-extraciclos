@@ -78,17 +78,18 @@ if st.session_state['pagina_actual'] == "inicio":
     with col_l:
         st.markdown(f'<p class="almacen-tag">ALMACÉN 1010</p>', unsafe_allow_html=True)
         if st.button("📦\n\n MATERIAL DE EMPAQUE"):
-            st.session_state['pagina_actual'] = "sistema"
+            st.session_state['pagina_actual'] = "sistema" # Dirige al sistema funcional
             st.rerun()
             
     with col_r:
         st.markdown(f'<p class="almacen-tag">ALMACÉN 1070</p>', unsafe_allow_html=True)
         if st.button("🔢\n\nMATERIAL PROMOCIONAL"):
-            st.session_state['pagina_actual'] = "sistema"
-            st.rerun()
+            # NO CAMBIA DE PÁGINA - Se queda en el inicio
+            st.toast("Módulo Almacén 1070 en desarrollo...", icon="⚠️")
+            pass 
 
 # ---------------------------------------------------------
-# PANTALLA 2: SISTEMA PRINCIPAL
+# PANTALLA 2: SISTEMA PRINCIPAL (FUNCIONALIDAD INTACTA)
 # ---------------------------------------------------------
 elif st.session_state['pagina_actual'] == "sistema":
     
@@ -102,7 +103,6 @@ elif st.session_state['pagina_actual'] == "sistema":
     PATH_COSTOS = "master_costos.csv"
     HISTORICO_FILE = "base_historica_bago.csv"
 
-    def guardar_maestro(df, path): df.to_csv(path, index=False)
     def cargar_maestro(path): return pd.read_csv(path) if os.path.exists(path) else None
     def leer_archivo(archivo):
         try:
@@ -202,9 +202,9 @@ elif st.session_state['pagina_actual'] == "sistema":
             ug = st.file_uploader("Maestro GP", type=['xlsx', 'xls', 'csv'])
             if ug:
                 d = leer_archivo(ug); d.columns = d.columns.str.strip().str.upper()
-                guardar_maestro(d, PATH_GP); st.success("GP Guardado.")
+                d.to_csv(PATH_GP, index=False); st.success("GP Guardado.")
         with c_b:
             uc = st.file_uploader("Maestro Costos", type=['xlsx', 'xls', 'csv'])
             if uc:
                 d = leer_archivo(uc); d.columns = d.columns.str.strip().str.upper()
-                guardar_maestro(d, PATH_COSTOS); st.success("Costos Guardado.")
+                d.to_csv(PATH_COSTOS, index=False); st.success("Costos Guardado.")
