@@ -19,7 +19,7 @@ st.markdown(f"""
     
     /* Botones de Almacén */
     div.stButton > button {{ 
-        background: rgba(255, 255, 255, 0.7) !important; 
+        background: rgba(250, 255, 255, 0.7) !important; 
         backdrop-filter: blur(15px) !important; 
         color: #333 !important; 
         border: 1px solid rgba(255, 255, 255, 0.3) !important; 
