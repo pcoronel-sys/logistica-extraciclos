@@ -4,7 +4,7 @@ import os
 from datetime import datetime, timedelta
 
 # 1. CONFIGURACIÓN DE PÁGINA
-st.set_page_config(page_title="Laboratorios Bagó - Intel Stock", layout="wide", page_icon="🧪")
+st.set_page_config(page_title="Laboratorios Bagó - Conciliación Extra Ciclos", layout="wide", page_icon="🧪")
 
 # --- DISEÑO ESTÉTICO UI/UX PRO ---
 MAGENTA_BAGO = "#C7006A" 
@@ -76,16 +76,16 @@ if st.session_state['pagina_actual'] == "inicio":
     _, col_l, col_r, _ = st.columns([2, 3, 3, 2])
     
     with col_l:
-        st.markdown(f'<p class="almacen-tag">ALMACÉN 1010</p>', unsafe_allow_html=True)
-        if st.button("📦\n\n MATERIAL DE EMPAQUE"):
+        st.markdown(f'<p class="almacen-tag">extra</p>', unsafe_allow_html=True)
+        if st.button("📦\n\n Extra Ciclos"):
             st.session_state['pagina_actual'] = "sistema" # Dirige al sistema funcional
             st.rerun()
             
     with col_r:
-        st.markdown(f'<p class="almacen-tag">ALMACÉN 1070</p>', unsafe_allow_html=True)
-        if st.button("🔢\n\nMATERIAL PROMOCIONAL"):
+        st.markdown(f'<p class="almacen-tag"></p>', unsafe_allow_html=True)
+        if st.button("🔢\n\nReprogramaciones"):
             # NO CAMBIA DE PÁGINA - Se queda en el inicio
-            st.toast("Módulo Almacén 1070 en desarrollo...", icon="⚠️")
+            st.toast("Módulo en desarrollo...", icon="⚠️")
             pass 
 
 # ---------------------------------------------------------
