@@ -4,40 +4,75 @@ import os
 from datetime import datetime
 
 # 1. CONFIGURACIÓN DE PÁGINA
-st.set_page_config(page_title="Laboratorios Bagó - Intel Stock", layout="wide", page_icon="🧪")
+st.set_page_config(page_title="Laboratorios Bagó - Extra Ciclos", layout="wide", page_icon="🧪")
 
-# --- 🎨 ESTILOS CORPORATIVOS Y PREMIUM (ESPEJO Y RELIEVE) ---
+# --- 🎨 MOTOR DE ESTILOS "GLASS EFECT" PREMIUM 🎨 ---
 st.markdown("""
     <style>
-    header, [data-testid="stHeader"] { display: none !important; }
-    .stApp { background-color: #ffffff; }
+    /* Ocultar elementos estándar de Streamlit */
+    header, [data-testid="stHeader"], footer { display: none !important; }
     
-    /* Títulos Principales */
-    .main-title { 
-        color: #E91E63; font-size: 55px; font-weight: bold; 
-        text-align: center; margin-bottom: 0px; 
+    /* FONDO DE LA APP CON DEGRADADO SUAVE */
+    .stApp {
+        background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
     }
-    .sub-title { color: #7f8c8d; font-size: 22px; text-align: center; margin-bottom: 50px; }
-    .almacen-tag { color: #E91E63; font-weight: bold; font-size: 16px; text-align: center; margin-bottom: 10px; }
+
+    /* --- 🪞 PANTALLA PRINCIPAL: CONTENEDOR EFECTO CRISTAL (GLASSMORPHISM) 🪞 --- */
+    .glass-container {
+        position: relative;
+        margin: auto;
+        top: 10vh;
+        width: 80%;
+        padding: 60px;
+        background: rgba(255, 255, 255, 0.45); /* Fondo semi-transparente */
+        backdrop-filter: blur(15px); /* DESENFOQUE DE CRISTAL */
+        -webkit-backdrop-filter: blur(15px);
+        border-radius: 30px;
+        border: 1px solid rgba(255, 255, 255, 0.5); /* Borde brillante fino */
+        box-shadow: 0 25px 45px rgba(0,0,0,0.05); /* Sombra suave */
+        text-align: center;
+        z-index: 1;
+    }
+
+    /* --- TÍTULOS PREMIUM --- */
+    .main-title { 
+        background: linear-gradient(90deg, #E91E63 0%, #C2185B 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-size: 60px; font-weight: bold; margin-bottom: 0px; 
+    }
+    .sub-title { color: #7f8c8d; font-size: 22px; margin-bottom: 60px; font-weight: 300; }
+    .almacen-tag { color: #E91E63; font-weight: bold; font-size: 16px; margin-bottom: 15px; letter-spacing: 1px; }
     
-    /* Botones de Inicio Estilo Relieve/Espejo */
+    /* --- ⛓️ BOTONES CENTRALES ESTILO RELIEVE/METAL ⛓️ --- */
+    /* Botones grandes en el menú principal */
     .stButton>button {
-        background: linear-gradient(145deg, #e91e63, #c2185b) !important;
-        color: white !important; font-weight: bold !important;
-        border-radius: 15px !important; border: none !important;
-        box-shadow: 5px 5px 15px #d1d1d1, -5px -5px 15px #ffffff !important;
+        background: linear-gradient(145deg, #ff216d, #d11c5a) !important;
+        color: white !important; font-weight: bold !important; font-size: 17px !important;
+        border-radius: 20px !important; border: 1px solid rgba(255,255,255,0.2) !important;
         height: 4em !important; width: 100% !important;
+        box-shadow: 5px 5px 15px #c7c9c8, -5px -5px 15px #ffffff !important; /* Relieve neumórfico */
         transition: 0.3s;
     }
-    .stButton>button:hover { transform: translateY(-3px); box-shadow: 8px 8px 25px #bcbcbc !important; }
+    .stButton>button:hover {
+        transform: translateY(-3px);
+        box-shadow: 8px 8px 25px #b8bab9 !important;
+        background: linear-gradient(145deg, #ff3d81, #e61f64) !important;
+    }
+    .stButton>button:active {
+        box-shadow: inset 5px 5px 10px #a61647, inset -5px -5px 10px #ff2a83 !important;
+    }
 
-    /* Estilo para las Tablas y KPIs del sistema interno */
+    /* --- 📊 ESTILOS PARA EL SISTEMA INTERNO (Mantenidos) --- */
     [data-testid="stTable"] thead tr th {
         background-color: #2C3E50 !important; color: white !important; font-weight: bold !important;
     }
     div[data-testid="stMetric"] {
-        background-color: #fcfcfc; border-left: 6px solid #4CA1AF; border-radius: 10px; padding: 15px !important;
-        box-shadow: 2px 2px 5px rgba(0,0,0,0.05);
+        background: rgba(255, 255, 255, 0.6) !important;
+        backdrop-filter: blur(5px);
+        border-radius: 15px; padding: 20px !important;
+        box-shadow: 5px 5px 15px rgba(0,0,0,0.02);
+        border: 1px solid rgba(255, 255, 255, 0.4);
     }
     </style>
     """, unsafe_allow_html=True)
@@ -47,33 +82,32 @@ if 'pagina_actual' not in st.session_state:
     st.session_state['pagina_actual'] = "inicio"
 
 # ---------------------------------------------------------
-# PANTALLA DE INICIO (ESTILO IMAGEN)
+# PANTALLA DE INICIO (LIMPIA Y CON GLASS EFECT)
 # ---------------------------------------------------------
 if st.session_state['pagina_actual'] == "inicio":
-    st.markdown("<p style='text-align:center; color:#bdc3c7; margin-top:50px; letter-spacing:2px;'>👋 BUENAS TARDES, EQUIPO BAGÓ</p>", unsafe_allow_html=True)
+    
+    # Contenedor principal con efecto cristal
+    st.markdown('<div class="glass-container">', unsafe_allow_html=True)
+    
+    st.markdown("<p style='color:#90a4ae; font-weight:bold; letter-spacing:2px;'>👋 BUENAS TARDES, EQUIPO BAGÓ</p>", unsafe_allow_html=True)
     st.markdown("<h1 class='main-title'>Laboratorios Bagó</h1>", unsafe_allow_html=True)
-    st.markdown("<p class='sub-title'>Intel-Stock Management</p>", unsafe_allow_html=True)
+    st.markdown("<p class='sub-title'>Sistema de Cálculo de Extra Ciclos</p>", unsafe_allow_html=True)
 
-    _, col_btn1, col_btn2, _ = st.columns([1, 2, 2, 1])
+    _, col_btn1, col_btn2, _ = st.columns([0.5, 2, 2, 0.5])
     
     with col_btn1:
-        st.markdown("<p class='almacen-tag'>ALMACÉN 1010</p>", unsafe_allow_html=True)
-        if st.button("📦 MATERIAL DE EMPAQUE"):
+        st.markdown("<p class='almacen-tag'>📦 ALMACÉN 1010</p>", unsafe_allow_html=True)
+        if st.button("CALCULAR: MATERIAL DE EMPAQUE"):
             st.session_state['pagina_actual'] = "sistema"
             st.rerun()
 
     with col_btn2:
-        st.markdown("<p class='almacen-tag'>ALMACÉN 1070</p>", unsafe_allow_html=True)
-        if st.button("🔢 MATERIAL PROMOCIONAL"):
+        st.markdown("<p class='almacen-tag'>🔢 ALMACÉN 1070</p>", unsafe_allow_html=True)
+        if st.button("CALCULAR: MATERIAL PROMOCIONAL"):
             st.session_state['pagina_actual'] = "sistema"
             st.rerun()
 
-    # Secciones informativas inferiores
-    st.markdown("<br><br><br>", unsafe_allow_html=True)
-    c1, c2, c3 = st.columns(3)
-    with c1: st.info("📂 **1. Conexión**\n\nMaestros de inventario")
-    with c2: st.warning("⚡ **2. Proceso**\n\nCruce inteligente")
-    with c3: st.success("📊 **3. Auditoría**\n\nReporte final")
+    st.markdown('</div>', unsafe_allow_html=True) # Cerrar contenedor cristal
 
 # ---------------------------------------------------------
 # SISTEMA PRINCIPAL (TU CÓDIGO ORIGINAL INTACTO)
@@ -81,9 +115,12 @@ if st.session_state['pagina_actual'] == "inicio":
 elif st.session_state['pagina_actual'] == "sistema":
     
     # Botón lateral para regresar
-    if st.sidebar.button("⬅️ Volver al Menú Principal"):
-        st.session_state['pagina_actual'] = "inicio"
-        st.rerun()
+    with st.sidebar:
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("⬅️ REGRESAR AL MENÚ PRINCIPAL"):
+            st.session_state['pagina_actual'] = "inicio"
+            st.rerun()
+        st.markdown("---")
 
     # --- RUTAS ---
     PATH_GP = "master_gp.csv"
@@ -98,8 +135,8 @@ elif st.session_state['pagina_actual'] == "sistema":
             return pd.read_csv(archivo, encoding='latin-1')
         except: return None
 
-    st.title("📊 Control de Liquidación Logística")
-    tabs = st.tabs(["🚀 Liquidación Mensual", "🔍 Detalle de Carga Actual", "⚙️ Configurar Maestros", "🗄️ Historial"])
+    st.title("📊 Auditoría de Cálculo de Extra Ciclos")
+    tabs = st.tabs(["🚀 Liquidación", "🔍 Detalle Actual", "⚙️ Configurar Maestros", "🗄️ Historial"])
 
     m_gp = cargar_maestro(PATH_GP)
     m_costos = cargar_maestro(PATH_COSTOS)
@@ -110,7 +147,7 @@ elif st.session_state['pagina_actual'] == "sistema":
         else:
             c1, c2 = st.columns([1, 2])
             with c1: mes_sel = st.selectbox("Mes", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"])
-            with c2: archivo = st.file_uploader("Subir Carga Mensual", type=['xlsx', 'xls', 'csv'])
+            with c2: archivo = st.file_uploader("Subir Archivo de Movimientos", type=['xlsx', 'xls', 'csv'])
 
             if archivo:
                 df_c = leer_archivo(archivo)
@@ -149,7 +186,7 @@ elif st.session_state['pagina_actual'] == "sistema":
                     res['IVA 15%'] = res['VALOR_LOGISTICA'] * 0.15
                     res['TOTAL CON IVA'] = res['VALOR_LOGISTICA'] + res['IVA 15%']
 
-                    st.subheader(f"📋 Resumen: {mes_sel}")
+                    st.subheader(f"📋 Resumen de Cálculo: {mes_sel}")
                     tipo_f = st.radio("Ver por Tipo:", ["Todos", "Solo MM", "Solo MP"], horizontal=True)
                     summary = res.groupby(['GP', 'TIPO'])['VALOR_LOGISTICA'].sum().unstack(fill_value=0).reset_index()
                     for c in ['MM', 'MP']: 
@@ -176,11 +213,11 @@ elif st.session_state['pagina_actual'] == "sistema":
                         pd.concat([pd.read_csv(HISTORICO_FILE) if os.path.exists(HISTORICO_FILE) else pd.DataFrame(), res], ignore_index=True).to_csv(HISTORICO_FILE, index=False)
                         st.success("Guardado.")
 
-    # --- PESTAÑA 2: DETALLE (KPIs RESTAURADOS) ---
+    # --- PESTAÑA 2: DETALLE ---
     with tabs[1]:
         if 'res_actual' in st.session_state:
             df_d = st.session_state['res_actual']
-            st.subheader(f"📑 Auditoría Detallada: {st.session_state['mes_actual']}")
+            st.subheader(f"📑 Desglose de Auditoría: {st.session_state['mes_actual']}")
             k1, k2, k3, k4, k5 = st.columns(5)
             k1.metric("Bultos", f"{df_d['BULTOS'].sum():,.0f}")
             k2.metric("Total Prep.", f"$ {df_d['TOTAL PREPARACION'].sum():,.2f}")
@@ -193,15 +230,15 @@ elif st.session_state['pagina_actual'] == "sistema":
 
     # --- PESTAÑAS 3 Y 4 ---
     with tabs[2]:
-        st.header("⚙️ Configuración")
+        st.header("⚙️ Configuración de Maestros")
         ca, cb = st.columns(2)
         with ca:
-            ug = st.file_uploader("Maestro GP", type=['xlsx', 'xls', 'csv'], key="maestro_gp")
+            ug = st.file_uploader("Actualizar Maestro GP", type=['xlsx', 'xls', 'csv'], key="maestro_gp")
             if ug:
                 d = leer_archivo(ug); d.columns = d.columns.str.strip().str.upper()
                 guardar_maestro(d, PATH_GP); st.success("GP Guardado.")
         with cb:
-            uc = st.file_uploader("Maestro Costos", type=['xlsx', 'xls', 'csv'], key="maestro_costos")
+            uc = st.file_uploader("Actualizar Maestro Costos", type=['xlsx', 'xls', 'csv'], key="maestro_costos")
             if uc:
                 d = leer_archivo(uc); d.columns = d.columns.str.strip().str.upper()
                 guardar_maestro(d, PATH_COSTOS); st.success("Costos Guardado.")
@@ -209,7 +246,7 @@ elif st.session_state['pagina_actual'] == "sistema":
     with tabs[3]:
         if os.path.exists(HISTORICO_FILE):
             h = pd.read_csv(HISTORICO_FILE)
-            st.subheader("📋 Historial")
+            st.subheader("📋 Historial de Cálculos")
             m_del = st.selectbox("Mes a borrar:", sorted(h['MES_REPORTE'].unique()))
             if st.button("❌ Eliminar Periodo"):
                 h[h['MES_REPORTE'] != m_del].to_csv(HISTORICO_FILE, index=False); st.rerun()
