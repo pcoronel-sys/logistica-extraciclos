@@ -13,15 +13,10 @@ st.markdown("""
     .block-container { padding-top: 1rem !important; }
     .stApp { background-color: #ffffff; }
     [data-testid="stTable"] thead tr th {
-        background-color: #2C3E50 !important;
-        color: white !important;
-        font-weight: bold !important;
+        background-color: #2C3E50 !important; color: white !important; font-weight: bold !important;
     }
     div[data-testid="stMetric"] {
-        background-color: #fcfcfc;
-        border-left: 6px solid #4CA1AF;
-        border-radius: 10px;
-        padding: 15px !important;
+        background-color: #fcfcfc; border-left: 6px solid #4CA1AF; border-radius: 10px; padding: 15px !important;
     }
     .stButton>button {
         background: linear-gradient(90deg, #2C3E50 0%, #4CA1AF 100%) !important;
@@ -66,7 +61,6 @@ def leer_archivo(archivo):
         return pd.read_csv(archivo, encoding='latin-1')
     except: return None
 
-# --- CARGA DE DATOS ---
 st.title("📊 Control de Liquidación Logística")
 tabs = st.tabs(["🚀 Liquidación Mensual", "🔍 Detalle de Carga Actual", "⚙️ Configurar Maestros", "🗄️ Historial"])
 
@@ -84,36 +78,39 @@ with tabs[0]:
         if archivo:
             df_c = leer_archivo(archivo)
             if df_c is not None:
-                # 1. Limpieza Inicial
+                # 1. NORMALIZACIÓN DE CARGA
                 df_c.columns = df_c.columns.str.strip().str.upper()
                 df_c['CODIGO'] = df_c['CODIGO'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
-                
-                # 2. Preparar Maestros (Eliminar Duplicados Críticos)
-                col_id_gp = [c for c in m_gp.columns if 'CODIGO' in c][0]
-                m_gp_clean = m_gp.drop_duplicates(subset=[col_id_gp])
-                m_gp_clean[col_id_gp] = m_gp_clean[col_id_gp].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
-                
-                m_costos_clean = m_costos.rename(columns={'PRECIO_PREP': 'PREPARACION', 'PRECIO_TRANS': 'TRANSPORTE'}).drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
-                m_costos_clean['DESCRIPCIÓN ZONA'] = m_costos_clean['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
                 df_c['DESCRIPCIÓN ZONA'] = df_c['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
-
-                # 3. Merges (Cruces)
-                res = pd.merge(df_c, m_gp_clean[[col_id_gp, 'GP', 'TIPO']], left_on='CODIGO', right_on=col_id_gp, how='left')
-                res = pd.merge(res, m_costos_clean[['DESCRIPCIÓN ZONA', 'PREPARACION', 'TRANSPORTE']], on='DESCRIPCIÓN ZONA', how='left')
                 
-                # 4. Cálculos Matemáticos (Blindados)
-                for col in ['BULTOS', 'PREPARACION', 'TRANSPORTE']:
+                # 2. NORMALIZACIÓN DE MAESTROS (Eliminar duplicados para evitar inflar montos)
+                col_id_gp = [c for c in m_gp.columns if 'CODIGO' in c][0]
+                m_gp_clean = m_gp.copy()
+                m_gp_clean[col_id_gp] = m_gp_clean[col_id_gp].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+                m_gp_clean = m_gp_clean.drop_duplicates(subset=[col_id_gp])
+                
+                m_costos_clean = m_costos.copy()
+                m_costos_clean.columns = m_costos_clean.columns.str.strip().str.upper()
+                m_costos_clean['DESCRIPCIÓN ZONA'] = m_costos_clean['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
+                m_costos_clean = m_costos_clean.drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
+                
+                # 3. CRUCE (MERGE)
+                res = pd.merge(df_c, m_gp_clean[[col_id_gp, 'GP', 'TIPO']], left_on='CODIGO', right_on=col_id_gp, how='left')
+                res = pd.merge(res, m_costos_clean[['DESCRIPCIÓN ZONA', 'PRECIO_PREP', 'PRECIO_TRANS']], on='DESCRIPCIÓN ZONA', how='left')
+                
+                # 4. CÁLCULOS FILA POR FILA
+                for col in ['BULTOS', 'PRECIO_PREP', 'PRECIO_TRANS']:
                     res[col] = pd.to_numeric(res[col], errors='coerce').fillna(0)
                 
-                res['TOTAL PREPARACION'] = res['PREPARACION'] * res['BULTOS']
-                res['TOTAL TRANSPORTE'] = res['TRANSPORTE'] * res['BULTOS']
+                res['TOTAL PREPARACION'] = res['PRECIO_PREP'] * res['BULTOS']
+                res['TOTAL TRANSPORTE'] = res['PRECIO_TRANS'] * res['BULTOS']
                 res['VALOR_LOGISTICA'] = res['TOTAL PREPARACION'] + res['TOTAL TRANSPORTE']
                 res['IVA 15%'] = res['VALOR_LOGISTICA'] * 0.15
                 res['TOTAL CON IVA'] = res['VALOR_LOGISTICA'] + res['IVA 15%']
 
-                # 5. Resumen
-                st.subheader(f"📋 Reporte Consolidado: {mes_sel}")
-                tipo_f = st.radio("Filtrar Reporte por:", ["Todos", "Solo MM", "Solo MP"], horizontal=True)
+                # 5. REPORTE CONSOLIDADO
+                st.subheader(f"📋 Resumen: {mes_sel}")
+                tipo_f = st.radio("Ver:", ["Todos", "Solo MM", "Solo MP"], horizontal=True)
                 
                 summary = res.groupby(['GP', 'TIPO'])['VALOR_LOGISTICA'].sum().unstack(fill_value=0).reset_index()
                 for c in ['MM', 'MP']: 
@@ -124,9 +121,10 @@ with tabs[0]:
                 
                 summary['SUBTOTAL'] = summary.iloc[:, 1:].sum(axis=1)
                 summary['IVA 15%'] = summary['SUBTOTAL'] * 0.15
-                summary['TOTAL'] = summary['SUBTOTAL'] + summary['IVA 15%']
+                summary['TOTAL GENERAL'] = summary['SUBTOTAL'] + summary['IVA 15%']
 
-                tot = {'GP': '--- TOTAL GENERAL ---'}
+                # Fila de Totales
+                tot = {'GP': '--- TOTALES ---'}
                 for col in summary.columns[1:]: tot[col] = summary[col].sum()
                 summary_f = pd.concat([summary, pd.DataFrame([tot])], ignore_index=True)
 
@@ -134,70 +132,53 @@ with tabs[0]:
                 
                 st.session_state['res_actual'] = res
                 st.session_state['mes_actual'] = mes_sel
-                if st.button("💾 Guardar Periodo"):
+                if st.button("💾 Guardar en Historial"):
                     res['MES_REPORTE'] = mes_sel
                     res['FECHA_REGISTRO'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     pd.concat([pd.read_csv(HISTORICO_FILE) if os.path.exists(HISTORICO_FILE) else pd.DataFrame(), res], ignore_index=True).to_csv(HISTORICO_FILE, index=False)
-                    st.success("Guardado correctamente.")
+                    st.success("Guardado.")
 
-# --- PESTAÑA 2: DETALLE ---
+# --- PESTAÑA 2: DETALLE (AUDITORÍA) ---
 with tabs[1]:
     if 'res_actual' in st.session_state:
-        df_d = st.session_state['res_actual'].copy()
-        st.subheader(f"📑 Detalle - {st.session_state.get('mes_actual', '')}")
+        df_d = st.session_state['res_actual']
+        st.subheader(f"📑 Detalle de Auditoría: {st.session_state['mes_actual']}")
         
-        # KPIs
-        k1, k2, k3, k4, k5 = st.columns(5)
-        k1.metric("Bultos", f"{df_d['BULTOS'].sum():,.0f}")
-        k2.metric("Neto Prep.", f"$ {df_d['TOTAL PREPARACION'].sum():,.2f}")
-        k3.metric("Neto Trans.", f"$ {df_d['TOTAL TRANSPORTE'].sum():,.2f}")
-        k4.metric("Valor Neto", f"$ {df_d['VALOR_LOGISTICA'].sum():,.2f}")
-        k5.metric("Total IVA (15%)", f"$ {df_d['TOTAL CON IVA'].sum():,.2f}")
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric("Bultos Totales", f"{df_d['BULTOS'].sum():,.0f}")
+        k2.metric("Neto Sin IVA", f"$ {df_d['VALOR_LOGISTICA'].sum():,.2f}")
+        k3.metric("Total IVA (15%)", f"$ {df_d['IVA 15%'].sum():,.2f}")
+        k4.metric("Total Final", f"$ {df_d['TOTAL CON IVA'].sum():,.2f}")
         
-        st.markdown("---")
-        
-        # Filtros
-        c_f1, c_f2 = st.columns(2)
-        with c_f1: gps_sel = st.multiselect("Filtrar por GP:", options=sorted(df_d['GP'].unique().astype(str)))
-        with c_f2: tipos_sel = st.multiselect("Filtrar por Tipo:", options=sorted(df_d['TIPO'].unique().astype(str)))
-        
-        df_v = df_d.copy()
-        if gps_sel: df_v = df_v[df_v['GP'].isin(gps_sel)]
-        if tipos_sel: df_v = df_v[df_v['TIPO'].isin(tipos_sel)]
-
-        cols_orden = ['CODIGO', 'DESCRIPCIÓN ZONA', 'GP', 'TIPO', 'BULTOS', 'PREPARACION', 'TRANSPORTE', 'TOTAL PREPARACION', 'TOTAL TRANSPORTE', 'VALOR_LOGISTICA', 'IVA 15%', 'TOTAL CON IVA']
-        
-        st.dataframe(
-            df_v[cols_orden].style.format({c: "{:,.2f}" for c in ['PREPARACION', 'TRANSPORTE', 'TOTAL PREPARACION', 'TOTAL TRANSPORTE', 'VALOR_LOGISTICA', 'IVA 15%', 'TOTAL CON IVA']}),
-            use_container_width=True, height=450 
-        )
+        st.dataframe(df_d, use_container_width=True, height=400)
     else: st.info("Procese un archivo primero.")
 
-# --- PESTAÑAS 3 Y 4 (Config/Historial) ---
+# --- PESTAÑA 3: CONFIGURACIÓN ---
 with tabs[2]:
-    st.header("⚙️ Configuración")
+    st.header("⚙️ Configuración de Maestros")
     ca, cb = st.columns(2)
     with ca:
-        ug = st.file_uploader("Maestro GP", type=['xlsx', 'xls', 'csv'], key="ug")
+        ug = st.file_uploader("Actualizar Maestro GP", type=['xlsx', 'xls', 'csv'])
         if ug:
             d = leer_archivo(ug)
             if d is not None:
                 d.columns = d.columns.str.strip().str.upper()
                 guardar_maestro(d, PATH_GP); st.success("GP Guardado.")
     with cb:
-        uc = st.file_uploader("Maestro Costos", type=['xlsx', 'xls', 'csv'], key="uc")
+        uc = st.file_uploader("Actualizar Maestro Costos", type=['xlsx', 'xls', 'csv'])
         if uc:
             d = leer_archivo(uc)
             if d is not None:
                 d.columns = d.columns.str.strip().str.upper()
                 guardar_maestro(d, PATH_COSTOS); st.success("Costos Guardado.")
 
+# --- PESTAÑA 4: HISTORIAL ---
 with tabs[3]:
     if os.path.exists(HISTORICO_FILE):
         h = pd.read_csv(HISTORICO_FILE)
-        st.subheader("📋 Historial de Liquidaciones")
-        m_del = st.selectbox("Seleccione mes a borrar:", sorted(h['MES_REPORTE'].unique()))
-        if st.button("❌ Eliminar Mes"):
+        st.subheader("📋 Historial")
+        m_del = st.selectbox("Mes a borrar:", sorted(h['MES_REPORTE'].unique()))
+        if st.button("Eliminar"):
             h[h['MES_REPORTE'] != m_del].to_csv(HISTORICO_FILE, index=False)
             st.rerun()
         st.dataframe(h, use_container_width=True)
