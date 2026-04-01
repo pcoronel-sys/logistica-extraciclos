@@ -6,52 +6,38 @@ from datetime import datetime
 # 1. CONFIGURACIÓN DE PÁGINA
 st.set_page_config(page_title="Gestión Bagó", layout="wide", page_icon="🧪")
 
-# --- CSS RADICAL: PANTALLA FIJA, SIN SCROLL Y SIN HEADER ---
+# --- CSS EQUILIBRADO: CENTRADO Y SIN ESPACIOS ---
 st.markdown("""
     <style>
-    /* 1. ELIMINA HEADER Y FOOTER DE STREAMLIT */
-    header, [data-testid="stHeader"], footer { display: none !important; }
-    
-    /* 2. ELIMINA EL SCROLLBAR Y AJUSTA ESPACIOS AL MÁXIMO */
-    html, body, [data-testid="stAppViewContainer"] {
-        overflow: hidden !important;
-        margin: 0 !important;
-        padding: 0 !important;
+    /* ELIMINA EL HEADER BLANCO DE ARRIBA */
+    [data-testid="stHeader"] {
+        display: none !important;
     }
-
+    
+    /* SUBE TODO EL CONTENIDO PARA ELIMINAR EL AIRE SUPERIOR */
     .block-container {
-        padding-top: 0rem !important;
-        margin-top: -30px !important;
+        padding-top: 1rem !important;
     }
 
-    /* 3. CONTENEDOR DE LOGIN CENTRADO (SIN MOVIMIENTO) */
-    .login-wrapper {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: 100vh;
-        width: 100vw;
-        background-color: #ffffff;
-        position: fixed;
-        top: 0;
-        left: 0;
-        z-index: 9999;
-    }
+    .stApp { background-color: #ffffff; }
     
+    /* LOGIN PEQUEÑO Y CENTRADO */
     .login-box {
-        padding: 20px;
+        margin: auto;
+        padding: 30px;
         border-radius: 10px;
-        background-color: #ffffff;
+        background-color: #f8f9fa;
         box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         border: 1px solid #eeeeee;
-        width: 280px; /* Más pequeño aún */
+        width: 320px;
         text-align: center;
+        margin-top: 10vh;
     }
 
-    /* 4. REDUCIR TAMAÑO DE INPUTS Y BOTÓN */
-    .stTextInput div div input {
-        height: 30px !important;
-        font-size: 13px !important;
+    /* REDUCIR TAMAÑO DE LÍNEAS DE ACCESO */
+    .stTextInput input {
+        height: 35px !important;
+        font-size: 14px !important;
         text-align: center !important;
     }
 
@@ -59,14 +45,16 @@ st.markdown("""
         background: #2C3E50 !important;
         color: white !important;
         border-radius: 5px !important;
-        height: 2.2em !important;
-        font-size: 13px !important;
+        height: 2.5em !important;
         font-weight: bold !important;
-        margin-top: 10px;
     }
-
-    /* RESTAURAR SCROLL SOLO CUANDO YA ESTÁ AUTENTICADO */
-    .auth-mode { overflow: auto !important; }
+    
+    /* ENCABEZADOS DE TABLAS CON COLOR */
+    [data-testid="stTable"] thead tr th {
+        background-color: #2C3E50 !important;
+        color: white !important;
+        font-weight: bold !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -79,14 +67,16 @@ if 'autenticado' not in st.session_state:
 
 # --- PANTALLA DE LOGIN ---
 if not st.session_state['autenticado']:
-    st.markdown('<div class="login-wrapper">', unsafe_allow_html=True)
-    with st.container():
+    # Usamos columnas de Streamlit para el centrado real
+    _, col_central, _ = st.columns([1, 1, 1])
+    
+    with col_central:
         st.markdown('<div class="login-box">', unsafe_allow_html=True)
-        st.markdown("<h4 style='color: #2C3E50; margin-bottom: 2px;'>Bagó Logística</h4>", unsafe_allow_html=True)
-        st.markdown("<p style='color: #bdc3c7; font-size: 11px; margin-bottom: 15px;'>Acceso Restringido</p>", unsafe_allow_html=True)
+        st.markdown("<h3 style='color: #2C3E50; margin-bottom: 5px;'>Bagó Logística</h3>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #bdc3c7; font-size: 12px;'>Acceso Seguro</p>", unsafe_allow_html=True)
         
-        user = st.text_input("U", label_visibility="collapsed", placeholder="Usuario")
-        password = st.text_input("P", type="password", label_visibility="collapsed", placeholder="Contraseña")
+        user = st.text_input("Usuario", label_visibility="collapsed", placeholder="Usuario")
+        password = st.text_input("Contraseña", type="password", label_visibility="collapsed", placeholder="Contraseña")
         
         if st.button("ENTRAR"):
             if user == USUARIO_PRO and password == CLAVE_PRO:
@@ -95,11 +85,7 @@ if not st.session_state['autenticado']:
             else:
                 st.error("Credenciales Incorrectas")
         st.markdown('</div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
-
-# --- SI PASA EL LOGIN, PERMITIR SCROLL NUEVAMENTE ---
-st.markdown("<style>html, body, [data-testid='stAppViewContainer'] { overflow: auto !important; }</style>", unsafe_allow_html=True)
 
 # --- BARRA LATERAL ---
 st.sidebar.write(f"👤 **{USUARIO_PRO}**")
@@ -108,7 +94,7 @@ if st.sidebar.button("Cerrar Sesión"):
     st.rerun()
 
 # ---------------------------------------------------------
-# SISTEMA LOGÍSTICO COMPLETO
+# SISTEMA LOGÍSTICO COMPLETO (RESTAURADO)
 # ---------------------------------------------------------
 PATH_GP = "master_gp.csv"
 PATH_COSTOS = "master_costos.csv"
@@ -121,9 +107,6 @@ def leer_archivo(archivo):
         if archivo.name.lower().endswith(('.xlsx', '.xls')): return pd.read_excel(archivo)
         return pd.read_csv(archivo, encoding='latin-1')
     except: return None
-
-# Diseño de Tablas con Encabezado Color
-st.markdown("<style>[data-testid='stTable'] thead tr th { background-color: #2C3E50 !important; color: white !important; font-weight: bold !important; }</style>", unsafe_allow_html=True)
 
 st.title("📊 Control de Liquidación Logística")
 tabs = st.tabs(["🚀 Liquidación Mensual", "🔍 Detalle de Carga Actual", "⚙️ Configurar Maestros", "🗄️ Historial"])
@@ -172,6 +155,8 @@ with tabs[0]:
 
                 st.table(summary_f.style.format(precision=2).set_properties(**{'background-color': '#2C3E50', 'color': 'white', 'font-weight': 'bold'}, subset=pd.IndexSlice[summary_f.index[-1], :]))
                 
+                st.session_state['res_actual'] = res
+                st.session_state['mes_actual'] = mes_sel
                 if st.button("💾 Guardar Periodo"):
                     res['MES_REPORTE'] = mes_sel
                     res['FECHA_REGISTRO'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -189,14 +174,14 @@ with tabs[1]:
 with tabs[2]:
     ca, cb = st.columns(2)
     with ca:
-        ug = st.file_uploader("Actualizar GP", type=['xlsx', 'xls', 'csv'], key="ug")
+        ug = st.file_uploader("Actualizar Maestro GP", type=['xlsx', 'xls', 'csv'], key="ug")
         if ug:
             d = leer_archivo(ug)
             if d is not None:
                 d.columns = d.columns.str.strip().str.upper()
                 guardar_maestro(d, PATH_GP); st.success("GP Guardado.")
     with cb:
-        uc = st.file_uploader("Actualizar Costos", type=['xlsx', 'xls', 'csv'], key="uc")
+        uc = st.file_uploader("Actualizar Maestro Costos", type=['xlsx', 'xls', 'csv'], key="uc")
         if uc:
             d = leer_archivo(uc)
             if d is not None:
@@ -207,4 +192,9 @@ with tabs[2]:
 with tabs[3]:
     if os.path.exists(HISTORICO_FILE):
         h = pd.read_csv(HISTORICO_FILE)
+        with st.expander("🗑️ Borrar Mes"):
+            m = st.selectbox("Mes a borrar:", sorted(h['MES_REPORTE'].unique()))
+            if st.button("Eliminar"):
+                h[h['MES_REPORTE'] != m].to_csv(HISTORICO_FILE, index=False)
+                st.rerun()
         st.dataframe(h, use_container_width=True)
