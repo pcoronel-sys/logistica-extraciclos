@@ -6,17 +6,25 @@ from datetime import datetime
 # 1. CONFIGURACIÓN DE PÁGINA
 st.set_page_config(page_title="Gestión Bagó", layout="wide", page_icon="🧪")
 
-# --- ESTILO CORPORATIVO (ELIMINACIÓN TOTAL DE CABECERA FANTASMA) ---
+# --- CSS AGRESIVO PARA ELIMINAR CUADROS Y ESPACIOS SUPERIORES ---
 st.markdown("""
     <style>
-    /* ELIMINA EL ESPACIO EN BLANCO SUPERIOR DE STREAMLIT */
-    header, [data-testid="stHeader"] {
+    /* 1. ELIMINA EL HEADER, EL MENÚ Y EL ESPACIADO SUPERIOR DE RAÍZ */
+    header, [data-testid="stHeader"], .st-emotion-cache-18ni7ap, .st-emotion-cache-z5fcl4 {
         display: none !important;
+        height: 0px !important;
     }
     
+    /* 2. QUITA EL RELLENO (PADDING) DEL CONTENEDOR PRINCIPAL */
+    .block-container {
+        padding-top: 0rem !important;
+        padding-bottom: 0rem !important;
+        margin-top: -5rem !important; /* Empuja el contenido hacia arriba */
+    }
+
     .stApp { background-color: #ffffff; }
     
-    /* ENCABEZADOS DE TABLAS */
+    /* 3. DISEÑO DE TABLAS CON ENCABEZADO COLOR */
     [data-testid="stTable"] thead tr th {
         background-color: #2C3E50 !important;
         color: white !important;
@@ -24,21 +32,22 @@ st.markdown("""
         text-align: center !important;
     }
     
-    /* LOGIN TOTALMENTE CENTRADO Y COMPACTO */
+    /* 4. LOGIN TOTALMENTE LIMPIO Y CENTRADO */
     .login-wrapper {
         display: flex;
         justify-content: center;
         align-items: center;
-        height: 80vh; /* Centra verticalmente en la pantalla */
+        height: 100vh; /* Usa todo el alto de la pantalla */
+        margin-top: 5rem;
     }
     
     .login-box {
-        padding: 35px;
+        padding: 30px;
         border-radius: 12px;
         background-color: #f8f9fa;
         box-shadow: 0 10px 25px rgba(0,0,0,0.1);
         border: 1px solid #dee2e6;
-        width: 350px;
+        width: 340px;
         text-align: center;
     }
 
@@ -50,7 +59,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- USUARIO Y CONTRASEÑA ---
+# --- CREDENCIALES ---
 USUARIO_PRO = "admin"
 CLAVE_PRO = "bago2024"
 
@@ -59,36 +68,32 @@ if 'autenticado' not in st.session_state:
 
 # --- PANTALLA DE LOGIN ---
 if not st.session_state['autenticado']:
-    # Creamos un contenedor que use todo el ancho para centrar el login-box
     st.markdown('<div class="login-wrapper">', unsafe_allow_html=True)
     with st.container():
         st.markdown('<div class="login-box">', unsafe_allow_html=True)
-        st.markdown("<h2 style='color: #2C3E50; margin-bottom: 0;'>Bagó Logística</h2>", unsafe_allow_html=True)
-        st.markdown("<p style='color: #7f8c8d;'>Acceso al Sistema</p>", unsafe_allow_html=True)
+        st.markdown("<h2 style='color: #2C3E50; margin-bottom: 5px;'>Bagó Logística</h2>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #7f8c8d; font-size: 14px;'>Acceso Protegido</p>", unsafe_allow_html=True)
         
-        user = st.text_input("Usuario", label_visibility="collapsed", placeholder="Usuario")
-        password = st.text_input("Contraseña", type="password", label_visibility="collapsed", placeholder="Contraseña")
+        user = st.text_input("User", label_visibility="collapsed", placeholder="Usuario")
+        password = st.text_input("Pass", type="password", label_visibility="collapsed", placeholder="Contraseña")
         
-        if st.button("Ingresar"):
+        if st.button("INGRESAR"):
             if user == USUARIO_PRO and password == CLAVE_PRO:
                 st.session_state['autenticado'] = True
                 st.rerun()
             else:
-                st.error("Credenciales inválidas")
+                st.error("Acceso Denegado")
         st.markdown('</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
 
 # --- BARRA LATERAL ---
-st.sidebar.write(f"👤 **{USUARIO_PRO}**")
+st.sidebar.write(f"👤 Usuario: **{USUARIO_PRO}**")
 if st.sidebar.button("Cerrar Sesión"):
     st.session_state['autenticado'] = False
     st.rerun()
 
-# ---------------------------------------------------------
-# SISTEMA LOGÍSTICO (RESTAURADO CON TODAS LAS FUNCIONES)
-# ---------------------------------------------------------
-
+# --- SISTEMA LOGÍSTICO (TODAS LAS FUNCIONES ACTIVAS) ---
 PATH_GP = "master_gp.csv"
 PATH_COSTOS = "master_costos.csv"
 HISTORICO_FILE = "base_historica_bago.csv"
@@ -101,6 +106,7 @@ def leer_archivo(archivo):
         return pd.read_csv(archivo, encoding='latin-1')
     except: return None
 
+# Título y Navegación
 st.title("📊 Control de Liquidación Logística")
 tabs = st.tabs(["🚀 Liquidación Mensual", "🔍 Detalle de Carga Actual", "⚙️ Configurar Maestros", "🗄️ Historial"])
 
@@ -147,7 +153,6 @@ with tabs[0]:
                 summary_f = pd.concat([summary, pd.DataFrame([tot])], ignore_index=True)
 
                 st.table(summary_f.style.format(precision=2).set_properties(**{'background-color': '#2C3E50', 'color': 'white', 'font-weight': 'bold'}, subset=pd.IndexSlice[summary_f.index[-1], :]))
-                
                 st.session_state['res_actual'] = res
                 st.session_state['mes_actual'] = mes_sel
                 if st.button("💾 Guardar Periodo"):
@@ -165,7 +170,7 @@ with tabs[1]:
         k1.metric("Bultos", f"{df_det['BULTOS'].sum():,.0f}")
         k2.metric("Preparación", f"$ {df_det['TOTAL PREPARACION'].sum():,.2f}")
         k3.metric("Transporte", f"$ {df_det['TOTAL TRANSPORTE'].sum():,.2f}")
-        k4.metric("Total c/ IVA", f"$ {df_det['TOTAL CON IVA'].sum():,.2f}")
+        k4.metric("Total Final", f"$ {df_det['TOTAL CON IVA'].sum():,.2f}")
         st.dataframe(df_det, use_container_width=True)
     else: st.info("Procese un archivo primero.")
 
@@ -174,27 +179,14 @@ with tabs[2]:
     st.header("⚙️ Configuración")
     ca, cb = st.columns(2)
     with ca:
-        ug = st.file_uploader("Actualizar GP", type=['xlsx', 'xls', 'csv'], key="ug")
+        ug = st.file_uploader("Actualizar Maestro GP", type=['xlsx', 'xls', 'csv'], key="ug")
         if ug:
             d = leer_archivo(ug)
             if d is not None:
                 d.columns = d.columns.str.strip().str.upper()
                 guardar_maestro(d, PATH_GP); st.success("GP Guardado.")
     with cb:
-        uc = st.file_uploader("Actualizar Costos", type=['xlsx', 'xls', 'csv'], key="uc")
+        uc = st.file_uploader("Actualizar Maestro Costos", type=['xlsx', 'xls', 'csv'], key="uc")
         if uc:
             d = leer_archivo(uc)
-            if d is not None:
-                d.columns = d.columns.str.strip().str.upper()
-                guardar_maestro(d, PATH_COSTOS); st.success("Costos Guardado.")
-
-# --- PESTAÑA 4: HISTORIAL ---
-with tabs[3]:
-    if os.path.exists(HISTORICO_FILE):
-        h = pd.read_csv(HISTORICO_FILE)
-        with st.expander("🗑️ Borrar Mes"):
-            m = st.selectbox("Mes a borrar:", sorted(h['MES_REPORTE'].unique()))
-            if st.button("Eliminar"):
-                h[h['MES_REPORTE'] != m].to_csv(HISTORICO_FILE, index=False)
-                st.rerun()
-        st.dataframe(h, use_container_width=True)
+            if d is not None
