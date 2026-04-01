@@ -110,4 +110,81 @@ with tabs[0]:
                 
                 st.session_state['res_actual'] = res
                 st.session_state['mes_actual'] = mes_sel
-                if st.button(f"💾 Guardar Periodo {mes_sel}")
+                if st.button(f"💾 Guardar Periodo {mes_sel}"):
+                    res['MES_REPORTE'] = mes_sel
+                    res['FECHA_REGISTRO'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    pd.concat([pd.read_csv(HISTORICO_FILE) if os.path.exists(HISTORICO_FILE) else pd.DataFrame(), res], ignore_index=True).to_csv(HISTORICO_FILE, index=False)
+                    st.success("Guardado correctamente en el historial.")
+
+# --- PESTAÑA 2: CARGA ACTUAL ---
+with tabs[1]:
+    if 'res_actual' in st.session_state:
+        df_det = st.session_state['res_actual'].copy()
+        st.subheader("🔍 Filtros de Auditoría")
+        c_f1, c_f2 = st.columns(2)
+        with c_f1: gps_sel = st.multiselect("Filtrar por Gerente (GP):", options=sorted(df_det['GP'].unique()), default=None)
+        with c_f2: tipos_sel = st.multiselect("Filtrar por Tipo:", options=sorted(df_det['TIPO'].unique()), default=None)
+        
+        df_view = df_det.copy()
+        if gps_sel: df_view = df_view[df_view['GP'].isin(gps_sel)]
+        if tipos_sel: df_view = df_view[df_view['TIPO'].isin(tipos_sel)]
+        
+        bus_txt = st.text_input("🔍 Búsqueda rápida:", "").upper()
+        if bus_txt: df_view = df_view[df_view.astype(str).apply(lambda x: x.str.contains(bus_txt)).any(axis=1)]
+
+        st.markdown("---")
+        k1, k2, k3, k4, k5 = st.columns(5)
+        k1.metric("Bultos", f"{df_view['BULTOS'].sum():,.0f}")
+        k2.metric("Prep.", f"$ {df_view['TOTAL PREPARACION'].sum():,.2f}")
+        k3.metric("Trans.", f"$ {df_view['TOTAL TRANSPORTE'].sum():,.2f}")
+        k4.metric("Neto", f"$ {df_view['VALOR_LOGISTICA'].sum():,.2f}")
+        k5.metric("Total IVA", f"$ {df_view['TOTAL CON IVA'].sum():,.2f}")
+
+        cols_orden = ['CODIGO', 'DESCRIPCIÓN ZONA', 'GP', 'TIPO', 'BULTOS', 'PREPARACION', 'TRANSPORTE', 'TOTAL PREPARACION', 'TOTAL TRANSPORTE', 'VALOR_LOGISTICA', 'IVA 15%', 'TOTAL CON IVA']
+        tot_row = {'CODIGO': '--- TOTALES ---', 'BULTOS': df_view['BULTOS'].sum(), 'TOTAL PREPARACION': df_view['TOTAL PREPARACION'].sum(), 'TOTAL TRANSPORTE': df_view['TOTAL TRANSPORTE'].sum(), 'VALOR_LOGISTICA': df_view['VALOR_LOGISTICA'].sum(), 'IVA 15%': df_view['IVA 15%'].sum(), 'TOTAL CON IVA': df_view['TOTAL CON IVA'].sum()}
+        df_final = pd.concat([df_view[cols_orden], pd.DataFrame([tot_row])], ignore_index=True)
+        st.table(df_final.style.format({c: "{:,.2f}" for c in ['PREPARACION', 'TRANSPORTE', 'TOTAL PREPARACION', 'TOTAL TRANSPORTE', 'VALOR_LOGISTICA', 'IVA 15%', 'TOTAL CON IVA'] if c in df_final.columns}, na_rep="").set_properties(**{'background-color': '#2C3E50', 'color': 'white', 'font-weight': 'bold'}, subset=pd.IndexSlice[df_final.index[-1], :]))
+    else: st.info("⚠️ Procese un archivo primero.")
+
+# --- PESTAÑA 3: CONFIGURACIÓN ---
+with tabs[2]:
+    st.header("⚙️ Configuración")
+    c1, c2 = st.columns(2)
+    with c1:
+        u_gp = st.file_uploader("Actualizar Maestro GP", type=['xlsx', 'xls', 'csv'], key="ugp")
+        if u_gp:
+            df_u_gp = leer_archivo_protegido(u_gp)
+            if df_u_gp is not None:
+                df_u_gp.columns = df_u_gp.columns.str.strip().str.upper()
+                guardar_maestro(df_u_gp, PATH_GP); st.success("✅ Maestro GP guardado.")
+    with c2:
+        u_costos = st.file_uploader("Actualizar Maestro Costos", type=['xlsx', 'xls', 'csv'], key="ucostos")
+        if u_costos:
+            df_u_costos = leer_archivo_protegido(u_costos)
+            if df_u_costos is not None:
+                df_u_costos.columns = df_u_costos.columns.str.strip().str.upper()
+                guardar_maestro(df_u_costos, PATH_COSTOS); st.success("✅ Maestro de Costos guardado.")
+
+# --- PESTAÑA 4: HISTORIAL (CON ELIMINACIÓN) ---
+with tabs[3]:
+    st.header("🗄️ Historial de Reportes")
+    if os.path.exists(HISTORICO_FILE):
+        h_df = pd.read_csv(HISTORICO_FILE)
+        
+        st.subheader("🗑️ Gestión de Datos")
+        col_del1, col_del2 = st.columns([2, 1])
+        with col_del1:
+            meses_disp = sorted(h_df['MES_REPORTE'].unique())
+            mes_a_borrar = st.selectbox("Seleccione el mes que desea ELIMINAR:", meses_disp)
+        with col_del2:
+            st.write(" ")
+            if st.button("❌ Eliminar Mes Seleccionado"):
+                nuevo_h_df = h_df[h_df['MES_REPORTE'] != mes_a_borrar]
+                nuevo_h_df.to_csv(HISTORICO_FILE, index=False)
+                st.error(f"Se eliminaron los datos de {mes_a_borrar}.")
+                st.rerun()
+        
+        st.divider()
+        st.subheader("📋 Registros Guardados")
+        st.dataframe(h_df, use_container_width=True)
+    else: st.info("Aún no hay datos históricos guardados.")
