@@ -29,36 +29,22 @@ st.markdown("""
         transform: scale(1.02);
         box-shadow: 0 5px 15px rgba(225, 0, 120, 0.4);
     }
-    /* Estilo para que las tablas ocupen buen espacio */
-    .stDataFrame {
-        border: 1px solid #f0f0f0;
-        border-radius: 10px;
-    }
     </style>
     """, unsafe_allow_html=True)
 
-# ARCHIVOS DE MEMORIA LOCAL
 PATH_GP = "master_gp.csv"
 PATH_COSTOS = "master_costos.csv"
 HISTORICO_FILE = "base_historica_bago.csv"
 
-# --- FUNCIONES DE PERSISTENCIA ---
-def guardar_maestro(df, path):
-    df.to_csv(path, index=False)
-
-def cargar_maestro(path):
-    if os.path.exists(path):
-        return pd.read_csv(path)
-    return None
+def guardar_maestro(df, path): df.to_csv(path, index=False)
+def cargar_maestro(path): return pd.read_csv(path) if os.path.exists(path) else None
 
 def leer_archivo_protegido(archivo):
     try:
         nombre_lower = archivo.name.lower()
-        if nombre_lower.endswith(('.xlsx', '.xls')):
-            return pd.read_excel(archivo)
+        if nombre_lower.endswith(('.xlsx', '.xls')): return pd.read_excel(archivo)
         else:
-            try:
-                return pd.read_csv(archivo, encoding='utf-8')
+            try: return pd.read_csv(archivo, encoding='utf-8')
             except UnicodeDecodeError:
                 archivo.seek(0)
                 return pd.read_csv(archivo, encoding='latin-1')
@@ -70,43 +56,34 @@ def leer_archivo_protegido(archivo):
 st.title("🚀 Gestión Logística Inteligente - Bagó")
 tabs = st.tabs(["📊 Liquidación Mensual", "🔍 Detalle de Carga Actual", "⚙️ Configurar Maestros", "🗄️ Historial"])
 
-# --- PESTAÑA 3: CONFIGURAR MAESTROS ---
 with tabs[2]:
     st.header("⚙️ Actualización de Bases Maestras")
     c1, c2 = st.columns(2)
     with c1:
-        st.subheader("Maestro GP (Productos y Tipos)")
         u_gp = st.file_uploader("Subir Maestro GP", type=['xlsx', 'xls', 'csv'], key="ugp")
         if u_gp:
             df_u_gp = leer_archivo_protegido(u_gp)
             if df_u_gp is not None:
                 df_u_gp.columns = df_u_gp.columns.str.strip().str.upper()
-                guardar_maestro(df_u_gp, PATH_GP)
-                st.success(f"✅ Maestro GP actualizado.")
+                guardar_maestro(df_u_gp, PATH_GP); st.success("✅ Maestro GP actualizado.")
 
     with c2:
-        st.subheader("Maestro Costos (Zonas y Precios)")
         u_costos = st.file_uploader("Subir Maestro Costos", type=['xlsx', 'xls', 'csv'], key="ucostos")
         if u_costos:
             df_u_costos = leer_archivo_protegido(u_costos)
             if df_u_costos is not None:
                 df_u_costos.columns = df_u_costos.columns.str.strip().str.upper()
-                guardar_maestro(df_u_costos, PATH_COSTOS)
-                st.success(f"✅ Maestro de Costos actualizado.")
+                guardar_maestro(df_u_costos, PATH_COSTOS); st.success("✅ Maestro de Costos actualizado.")
 
 m_gp = cargar_maestro(PATH_GP)
 m_costos = cargar_maestro(PATH_COSTOS)
 
-# --- PESTAÑA 1: LIQUIDACIÓN ---
 with tabs[0]:
-    if m_gp is None or m_costos is None:
-        st.warning("⚠️ Configura los Maestros primero.")
+    if m_gp is None or m_costos is None: st.warning("⚠️ Configura los Maestros primero.")
     else:
         col_m, col_f = st.columns([1, 2])
-        with col_m:
-            mes_sel = st.selectbox("Mes de Carga", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"])
-        with col_f:
-            archivo_carga = st.file_uploader("📂 Subir archivo de Bultos", type=['xlsx', 'xls'])
+        with col_m: mes_sel = st.selectbox("Mes", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"])
+        with col_f: archivo_carga = st.file_uploader("📂 Subir Bultos", type=['xlsx', 'xls'])
 
         if archivo_carga:
             df_c = leer_archivo_protegido(archivo_carga)
@@ -118,7 +95,6 @@ with tabs[0]:
                 df_c['DESCRIPCIÓN ZONA'] = df_c['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
                 m_costos['DESCRIPCIÓN ZONA'] = m_costos['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
 
-                # SEMÁFORO
                 cod_nov = df_c[~df_c['CODIGO'].isin(m_gp[col_id_gp])]['CODIGO'].unique()
                 zon_nov = df_c[~df_c['DESCRIPCIÓN ZONA'].isin(m_costos['DESCRIPCIÓN ZONA'])]['DESCRIPCIÓN ZONA'].unique()
 
@@ -127,28 +103,24 @@ with tabs[0]:
                 err = False
                 with v1:
                     if len(cod_nov) == 0: st.success("✅ Productos OK")
-                    else: st.error(f"❌ {len(cod_nov)} Códigos faltantes"); st.write(cod_nov); err = True
+                    else: st.error(f"❌ {len(cod_nov)} Faltantes"); st.write(cod_nov); err = True
                 with v2:
                     if len(zon_nov) == 0: st.success("✅ Zonas OK")
-                    else: st.warning(f"⚠️ {len(zon_nov)} Zonas sin precio"); st.write(zon_nov); err = True
+                    else: st.warning(f"⚠️ {len(zon_nov)} Sin precio"); st.write(zon_nov); err = True
 
                 if not err:
-                    # PROCESAMIENTO
                     res = pd.merge(df_c, m_gp.drop_duplicates(subset=[col_id_gp])[[col_id_gp, 'GP', 'TIPO']], left_on='CODIGO', right_on=col_id_gp, how='left')
                     m_c_c = m_costos.rename(columns={'PRECIO_PREP': 'PREPARACION', 'PRECIO_TRANS': 'TRANSPORTE'}).drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
                     res = pd.merge(res, m_c_c[['DESCRIPCIÓN ZONA', 'PREPARACION', 'TRANSPORTE']], on='DESCRIPCIÓN ZONA', how='left')
                     
-                    for col in ['BULTOS', 'PREPARACION', 'TRANSPORTE']:
-                        res[col] = pd.to_numeric(res[col], errors='coerce').fillna(0)
+                    for col in ['BULTOS', 'PREPARACION', 'TRANSPORTE']: res[col] = pd.to_numeric(res[col], errors='coerce').fillna(0)
                     
-                    # CÁLCULOS
                     res['TOTAL PREPARACION'] = res['PREPARACION'] * res['BULTOS']
                     res['TOTAL TRANSPORTE'] = res['TRANSPORTE'] * res['BULTOS']
                     res['VALOR_LOGISTICA'] = res['TOTAL PREPARACION'] + res['TOTAL TRANSPORTE']
                     res['IVA 15%'] = res['VALOR_LOGISTICA'] * 0.15
                     res['TOTAL CON IVA'] = res['VALOR_LOGISTICA'] + res['IVA 15%']
 
-                    # --- REPORTE CONSOLIDADO ---
                     st.markdown("---")
                     st.subheader(f"📋 Reporte de Liquidación: {mes_sel}")
                     
@@ -159,71 +131,53 @@ with tabs[0]:
                     summary['IVA 15%'] = summary['SUBTOTAL'] * 0.15
                     summary['TOTAL'] = summary['SUBTOTAL'] + summary['IVA 15%']
 
-                    busqueda = st.text_input("🔍 Buscar por nombre de Gerente (GP):", "")
+                    busqueda = st.text_input("🔍 Buscar Gerente:", "")
                     summary_view = summary[summary['GP'].str.contains(busqueda.upper())] if busqueda else summary
 
                     tot = {'GP': '--- TOTAL GENERAL ---'}
                     for col in summary_view.columns[1:]: tot[col] = summary_view[col].sum()
                     summary_final = pd.concat([summary_view, pd.DataFrame([tot])], ignore_index=True)
 
-                    # --- ESTILO BONITO PARA LA TABLA ---
+                    # TABLA BONITA SIN LIBRERÍAS EXTERNAS
                     st.dataframe(
                         summary_final.style.format(precision=2)
-                        .background_gradient(cmap="PuRd", subset=["TOTAL"]) # Degradado Magenta en el Total
-                        .set_properties(**{'font-weight': 'bold'}, subset=pd.IndexSlice[summary_final.index[-1], :]) # Negrita a la última fila
-                        .set_properties(subset=['IVA 15%'], **{'color': '#E10078'}) # Color magenta al IVA
+                        .set_properties(**{'background-color': '#fdf2f8', 'color': '#E10078', 'font-weight': 'bold'}, subset=['TOTAL'])
+                        .set_properties(**{'background-color': '#E10078', 'color': 'white', 'font-weight': 'bold'}, subset=pd.IndexSlice[summary_final.index[-1], :])
                         , use_container_width=True
                     )
                     
                     st.session_state['res_actual'] = res
                     st.session_state['mes_actual'] = mes_sel
                     
-                    if st.button(f"💾 Guardar datos de {mes_sel}"):
+                    if st.button(f"💾 Guardar datos"):
                         res['MES_REPORTE'] = mes_sel
                         res['FECHA_REGISTRO'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         pd.concat([pd.read_csv(HISTORICO_FILE) if os.path.exists(HISTORICO_FILE) else pd.DataFrame(), res], ignore_index=True).to_csv(HISTORICO_FILE, index=False)
-                        st.success("Guardado en Histórico.")
+                        st.success("Guardado.")
 
-# --- PESTAÑA 2: DETALLE DE CARGA ACTUAL ---
 with tabs[1]:
-    st.header("🔍 Detalle de la Carga Procesada")
+    st.header("🔍 Detalle de Carga Actual")
     if 'res_actual' in st.session_state:
-        df_detalle = st.session_state['res_actual'].copy()
-        st.write(f"Mostrando el detalle para el mes de **{st.session_state['mes_actual']}**")
+        df_det_view = st.session_state['res_actual'].copy()
         
-        bus_det = st.text_input("🔍 Filtrar detalle:", "", key="bus_det")
-        df_det_view = df_detalle[df_detalle.astype(str).apply(lambda x: x.str.contains(bus_det.upper())).any(axis=1)] if bus_det else df_detalle
-
-        tot_det = {
-            'CODIGO': 'TOTALES', 
-            'BULTOS': df_det_view['BULTOS'].sum(),
-            'TOTAL PREPARACION': df_det_view['TOTAL PREPARACION'].sum(),
-            'TOTAL TRANSPORTE': df_det_view['TOTAL TRANSPORTE'].sum(),
-            'VALOR_LOGISTICA': df_det_view['VALOR_LOGISTICA'].sum(),
-            'IVA 15%': df_det_view['IVA 15%'].sum(),
-            'TOTAL CON IVA': df_det_view['TOTAL CON IVA'].sum()
-        }
-        
+        tot_det = {'CODIGO': 'TOTALES', 'BULTOS': df_det_view['BULTOS'].sum(), 'TOTAL PREPARACION': df_det_view['TOTAL PREPARACION'].sum(), 'TOTAL TRANSPORTE': df_det_view['TOTAL TRANSPORTE'].sum(), 'VALOR_LOGISTICA': df_det_view['VALOR_LOGISTICA'].sum(), 'IVA 15%': df_det_view['IVA 15%'].sum(), 'TOTAL CON IVA': df_det_view['TOTAL CON IVA'].sum()}
         df_det_final = pd.concat([df_det_view, pd.DataFrame([tot_det])], ignore_index=True)
         
-        # Estilo para el detalle
-        cols_num = ['PREPARACION', 'TRANSPORTE', 'TOTAL PREPARACION', 'TOTAL TRANSPORTE', 'VALOR_LOGISTICA', 'IVA 15%', 'TOTAL CON IVA']
+        # Formato de dinero manual para evitar errores
+        cols_m = ['PREPARACION', 'TRANSPORTE', 'TOTAL PREPARACION', 'TOTAL TRANSPORTE', 'VALOR_LOGISTICA', 'IVA 15%', 'TOTAL CON IVA']
         
-        # Formateo numérico y visual
-        df_styled = df_det_final.style.format({c: "{:.2f}" for c in cols_num if c in df_det_final.columns}, na_rep="")
-        df_styled = df_styled.set_properties(**{'background-color': '#fdf2f8'}, subset=['TOTAL CON IVA']) # Fondo rosado claro al total final
-        df_styled = df_styled.set_properties(**{'font-weight': 'bold'}, subset=pd.IndexSlice[df_det_final.index[-1], :]) # Negrita a la última fila
+        st.dataframe(
+            df_det_final.style.format({c: "{:.2f}" for c in cols_m if c in df_det_final.columns}, na_rep="")
+            .set_properties(**{'background-color': '#fdf2f8', 'font-weight': 'bold'}, subset=['TOTAL CON IVA'])
+            .set_properties(**{'background-color': '#E10078', 'color': 'white', 'font-weight': 'bold'}, subset=pd.IndexSlice[df_det_final.index[-1], :])
+            , use_container_width=True
+        )
+    else: st.info("Procesa un archivo primero.")
 
-        st.dataframe(df_styled, use_container_width=True)
-    else:
-        st.info("Primero procesa un archivo.")
-
-# --- PESTAÑA 4: HISTORIAL ---
 with tabs[3]:
     st.header("🗄️ Histórico")
     if os.path.exists(HISTORICO_FILE):
         h_df = pd.read_csv(HISTORICO_FILE)
         st.dataframe(h_df, use_container_width=True)
-        csv_bin = h_df.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Descargar", csv_bin, "historico.csv", "text/csv")
+        st.download_button("📥 Descargar", h_df.to_csv(index=False).encode('utf-8'), "historico.csv", "text/csv")
     else: st.info("Sin datos.")
