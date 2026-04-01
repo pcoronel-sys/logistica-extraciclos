@@ -1,6 +1,5 @@
 import streamlit as st
-import pd as pd
-import pandas as pd
+import pandas as pd  # <--- Corregido: Era 'import pandas as pd'
 from io import BytesIO
 import os
 from datetime import datetime
@@ -162,19 +161,19 @@ with tabs[1]:
         # Filtros Detalle
         c_f1, c_f2 = st.columns(2)
         with c_f1: gps_sel = st.multiselect("Filtrar por GP:", options=sorted(df_d['GP'].unique()))
-        with c_f2: tipos_sel = st.multiselect("Filtrar por Tipo:", options=sorted(df_det['TIPO'].unique()) if 'TIPO' in df_d else [])
+        with c_f2: tipos_sel = st.multiselect("Filtrar por Tipo:", options=sorted(df_d['TIPO'].unique()))
         
         df_v = df_d.copy()
         if gps_sel: df_v = df_v[df_v['GP'].isin(gps_sel)]
         if tipos_sel: df_v = df_v[df_v['TIPO'].isin(tipos_sel)]
 
-        # TABLA CON SCROLL INTERNO (Altura fija de 450px)
+        # TABLA CON SCROLL INTERNO
         cols_orden = ['CODIGO', 'DESCRIPCIÓN ZONA', 'GP', 'TIPO', 'BULTOS', 'PREPARACION', 'TRANSPORTE', 'TOTAL PREPARACION', 'TOTAL TRANSPORTE', 'VALOR_LOGISTICA', 'IVA 15%', 'TOTAL CON IVA']
         
         st.dataframe(
             df_v[cols_orden].style.format({c: "{:,.2f}" for c in ['PREPARACION', 'TRANSPORTE', 'TOTAL PREPARACION', 'TOTAL TRANSPORTE', 'VALOR_LOGISTICA', 'IVA 15%', 'TOTAL CON IVA']}),
             use_container_width=True,
-            height=450 # Scroll interno activo
+            height=450 
         )
     else: st.info("Procese un archivo primero.")
 
