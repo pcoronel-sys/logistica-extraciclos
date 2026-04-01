@@ -66,7 +66,7 @@ tabs = st.tabs(["🚀 Liquidación Mensual", "🔍 Detalle de Carga Actual", "�
 m_gp = cargar_maestro(PATH_GP)
 m_costos = cargar_maestro(PATH_COSTOS)
 
-# --- PESTAÑA 1 (SIN CAMBIOS SEGÚN TU PEDIDO) ---
+# --- PESTAÑA 1 (SIN CAMBIOS) ---
 with tabs[0]:
     if m_gp is None or m_costos is None: st.warning("⚠️ Cargue los maestros.")
     else:
@@ -120,27 +120,26 @@ with tabs[0]:
                     pd.concat([pd.read_csv(HISTORICO_FILE) if os.path.exists(HISTORICO_FILE) else pd.DataFrame(), res], ignore_index=True).to_csv(HISTORICO_FILE, index=False)
                     st.success("Guardado.")
 
-# --- PESTAÑA 2: CARGA ACTUAL (KPIs POTENCIADOS) ---
+# --- PESTAÑA 2: DETALLE (CON MÉTRICA DE TOTAL LOGÍSTICA AÑADIDA) ---
 with tabs[1]:
     if 'res_actual' in st.session_state:
         df_det = st.session_state['res_actual'].copy()
         
         st.subheader(f"📑 Auditoría Detallada - {st.session_state['mes_actual']}")
         
-        # NUEVAS MÉTRICAS SOLICITADAS
-        k1, k2, k3, k4 = st.columns(4)
+        # MÉTRICAS CON "TOTAL LOGÍSTICA" AÑADIDO
+        k1, k2, k3, k4, k5 = st.columns(5)
         k1.metric("Bultos Totales", f"{df_det['BULTOS'].sum():,.0f}")
         k2.metric("Total Preparación", f"$ {df_det['TOTAL PREPARACION'].sum():,.2f}")
         k3.metric("Total Transporte", f"$ {df_det['TOTAL TRANSPORTE'].sum():,.2f}")
-        k4.metric("Total Final (IVA)", f"$ {df_det['TOTAL CON IVA'].sum():,.2f}")
+        k4.metric("Total Logística (Neto)", f"$ {df_det['VALOR_LOGISTICA'].sum():,.2f}")
+        k5.metric("Total Final (IVA)", f"$ {df_det['TOTAL CON IVA'].sum():,.2f}")
         
         st.markdown("---")
         
-        # FILTRO DE BÚSQUEDA
         bus_det = st.text_input("🔍 Buscar en el detalle:", "").upper()
         df_view = df_det[df_det.astype(str).apply(lambda x: x.str.contains(bus_det)).any(axis=1)] if bus_det else df_det
 
-        # TABLA DE DETALLE
         cols_orden = ['CODIGO', 'DESCRIPCIÓN ZONA', 'GP', 'TIPO', 'BULTOS', 'PREPARACION', 'TRANSPORTE', 'TOTAL PREPARACION', 'TOTAL TRANSPORTE', 'VALOR_LOGISTICA', 'IVA 15%', 'TOTAL CON IVA']
         
         tot_row = {
