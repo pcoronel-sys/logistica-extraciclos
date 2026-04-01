@@ -11,8 +11,6 @@ st.set_page_config(page_title="Bagó Logística Pro", layout="wide", page_icon="
 st.markdown("""
     <style>
     .stApp { background-color: #ffffff; }
-    
-    /* Métricas */
     div[data-testid="stMetric"] {
         background: #ffffff;
         border-radius: 12px;
@@ -21,8 +19,6 @@ st.markdown("""
         box-shadow: 0 4px 6px rgba(0,0,0,0.02);
         padding: 20px !important;
     }
-
-    /* Botones Magenta */
     .stButton>button {
         background: linear-gradient(90deg, #E10078 0%, #8E004C 100%);
         color: white; border-radius: 10px; border: none;
@@ -67,10 +63,11 @@ def leer_archivo_protegido(archivo):
 
 # --- NAVEGACIÓN ---
 st.title("🚀 Gestión Logística Inteligente - Bagó")
-tabs = st.tabs(["📊 Liquidación Mensual", "⚙️ Configurar Maestros", "🗄️ Historial"])
+# Añadida la cuarta pestaña "Detalle de Carga Actual"
+tabs = st.tabs(["📊 Liquidación Mensual", "🔍 Detalle de Carga Actual", "⚙️ Configurar Maestros", "🗄️ Historial"])
 
-# --- PESTAÑA 2: CONFIGURAR MAESTROS ---
-with tabs[1]:
+# --- PESTAÑA 3: CONFIGURAR MAESTROS (Movida a la posición 3) ---
+with tabs[2]:
     st.header("⚙️ Actualización de Bases Maestras")
     c1, c2 = st.columns(2)
     with c1:
@@ -99,7 +96,7 @@ m_costos = cargar_maestro(PATH_COSTOS)
 # --- PESTAÑA 1: LIQUIDACIÓN ---
 with tabs[0]:
     if m_gp is None or m_costos is None:
-        st.warning("⚠️ Configura los Maestros primero.")
+        st.warning("⚠️ Configura los Maestros primero en la pestaña correspondiente.")
     else:
         col_m, col_f = st.columns([1, 2])
         with col_m:
@@ -141,7 +138,7 @@ with tabs[0]:
                         res[col] = pd.to_numeric(res[col], errors='coerce').fillna(0)
                     res['VALOR_LOGISTICA'] = (res['PREPARACION'] + res['TRANSPORTE']) * res['BULTOS']
 
-                    # --- REPORTE CON FILTRO ---
+                    # --- REPORTE CONSOLIDADO ---
                     st.markdown("---")
                     st.subheader(f"📋 Reporte de Liquidación: {mes_sel}")
                     
@@ -154,28 +151,53 @@ with tabs[0]:
 
                     # BUSCADOR DINÁMICO
                     busqueda = st.text_input("🔍 Buscar por nombre de Gerente (GP):", "")
-                    if busqueda:
-                        summary_view = summary[summary['GP'].str.contains(busqueda.upper())]
-                    else:
-                        summary_view = summary
+                    summary_view = summary[summary['GP'].str.contains(busqueda.upper())] if busqueda else summary
 
-                    # Fila de Totales
+                    # Fila de Totales para el resumen
                     tot = {'GP': '--- TOTAL GENERAL ---'}
                     for col in summary_view.columns[1:]: tot[col] = summary_view[col].sum()
                     summary_final = pd.concat([summary_view, pd.DataFrame([tot])], ignore_index=True)
 
                     st.dataframe(summary_final.style.format(precision=2), use_container_width=True)
                     
+                    # Guardar el procesamiento en el estado de la sesión para la pestaña de detalle
+                    st.session_state['res_actual'] = res
+                    st.session_state['mes_actual'] = mes_sel
+                    
                     if st.button(f"💾 Guardar datos de {mes_sel}"):
                         res['MES_REPORTE'] = mes_sel
                         res['FECHA_REGISTRO'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         pd.concat([pd.read_csv(HISTORICO_FILE), res] if os.path.exists(HISTORICO_FILE) else [res], ignore_index=True).to_csv(HISTORICO_FILE, index=False)
-                        st.success("Guardado.")
+                        st.success("Guardado en Histórico.")
 
-# --- PESTAÑA 3: HISTORIAL ---
-with tabs[2]:
+# --- PESTAÑA 2: DETALLE DE CARGA ACTUAL (NUEVA) ---
+with tabs[1]:
+    st.header("🔍 Detalle de la Carga Procesada")
+    if 'res_actual' in st.session_state:
+        df_detalle = st.session_state['res_actual']
+        st.write(f"Mostrando el detalle fila por fila para el mes de **{st.session_state['mes_actual']}**")
+        
+        # Filtro de búsqueda para el detalle
+        bus_det = st.text_input("🔍 Filtrar detalle por Gerente o Producto:", "", key="bus_det")
+        if bus_det:
+            # Buscamos en GP o en CODIGO o en DESCRIPCIÓN (si existe)
+            df_det_view = df_detalle[df_detalle.astype(str).apply(lambda x: x.str.contains(bus_det.upper())).any(axis=1)]
+        else:
+            df_det_view = df_detalle
+
+        # Fila de totales para el detalle
+        tot_det = {'CODIGO': 'TOTALES', 'VALOR_LOGISTICA': df_det_view['VALOR_LOGISTICA'].sum(), 'BULTOS': df_det_view['BULTOS'].sum()}
+        df_det_final = pd.concat([df_det_view, pd.DataFrame([tot_det])], ignore_index=True).fillna("")
+        
+        st.dataframe(df_det_final, use_container_width=True)
+    else:
+        st.info("Primero sube y procesa un archivo en la pestaña 'Liquidación Mensual'.")
+
+# --- PESTAÑA 4: HISTORIAL ---
+with tabs[3]:
+    st.header("🗄️ Histórico de Movimientos")
     if os.path.exists(HISTORICO_FILE):
         h_df = pd.read_csv(HISTORICO_FILE)
         st.dataframe(h_df, use_container_width=True)
-        st.download_button("📥 Descargar Todo", h_df.to_csv(index=False).encode('utf-8'), "historico.csv")
-    else: st.info("Sin datos.")
+        st.download_button("📥 Descargar Todo el Histórico", h_df.to_csv(index=False).encode('utf-8'), "historico_completo.csv", "text/csv")
+    else: st.info("Sin datos históricos.")
