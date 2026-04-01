@@ -1,44 +1,53 @@
 import streamlit as st
 import pandas as pd
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # 1. CONFIGURACIÓN DE PÁGINA
 st.set_page_config(page_title="Laboratorios Bagó - Intel Stock", layout="wide", page_icon="🧪")
 
-# --- 🎨 ESTILOS CORPORATIVOS Y PREMIUM (ESPEJO Y RELIEVE) ---
-st.markdown("""
-    <style>
-    header, [data-testid="stHeader"] { display: none !important; }
-    .stApp { background-color: #ffffff; }
-    
-    /* Títulos Principales */
-    .main-title { 
-        color: #E91E63; font-size: 55px; font-weight: bold; 
-        text-align: center; margin-bottom: 0px; 
-    }
-    .sub-title { color: #7f8c8d; font-size: 22px; text-align: center; margin-bottom: 50px; }
-    .almacen-tag { color: #E91E63; font-weight: bold; font-size: 16px; text-align: center; margin-bottom: 10px; }
-    
-    /* Botones de Inicio Estilo Relieve/Espejo */
-    .stButton>button {
-        background: linear-gradient(145deg, #e91e63, #c2185b) !important;
-        color: white !important; font-weight: bold !important;
-        border-radius: 15px !important; border: none !important;
-        box-shadow: 5px 5px 15px #d1d1d1, -5px -5px 15px #ffffff !important;
-        height: 4em !important; width: 100% !important;
-        transition: 0.3s;
-    }
-    .stButton>button:hover { transform: translateY(-3px); box-shadow: 8px 8px 25px #bcbcbc !important; }
+# --- DISEÑO ESTÉTICO UI/UX PRO ---
+MAGENTA_BAGO = "#C7006A" 
+MAGENTA_OSCURO = "#8A004A"
 
-    /* Estilo para las Tablas y KPIs del sistema interno */
-    [data-testid="stTable"] thead tr th {
-        background-color: #2C3E50 !important; color: white !important; font-weight: bold !important;
-    }
-    div[data-testid="stMetric"] {
-        background-color: #fcfcfc; border-left: 6px solid #4CA1AF; border-radius: 10px; padding: 15px !important;
-        box-shadow: 2px 2px 5px rgba(0,0,0,0.05);
-    }
+st.markdown(f"""
+    <style>
+    header, [data-testid="stHeader"] {{ display: none !important; }}
+    .main {{ background: radial-gradient(circle at top right, #ffffff, #f0f2f6); }}
+    .welcome-text {{ text-align: center; color: #888; font-size: 1.2rem; font-weight: 300; letter-spacing: 2px; text-transform: uppercase; margin-bottom: -10px; }}
+    .main-title {{ color: {MAGENTA_BAGO}; font-size: 5rem !important; font-weight: 900 !important; text-align: center; margin-top: 0px; letter-spacing: -4px; filter: drop-shadow(0px 10px 15px rgba(199, 0, 106, 0.2)); line-height: 1; }}
+    
+    /* Botones de Almacén */
+    div.stButton > button {{ 
+        background: rgba(255, 255, 255, 0.7) !important; 
+        backdrop-filter: blur(15px) !important; 
+        color: #333 !important; 
+        border: 1px solid rgba(255, 255, 255, 0.3) !important; 
+        border-radius: 35px !important; 
+        height: 250px !important; 
+        width: 100% !important; 
+        box-shadow: 0 20px 40px rgba(0,0,0,0.05) !important; 
+        transition: all 0.6s cubic-bezier(0.165, 0.84, 0.44, 1.0) !important; 
+        font-size: 1.4rem !important; 
+        font-weight: 800 !important; 
+        display: flex; 
+        flex-direction: column; 
+        justify-content: center; 
+    }}
+    div.stButton > button:hover {{ 
+        background: linear-gradient(135deg, {MAGENTA_BAGO} 0%, {MAGENTA_OSCURO} 100%) !important; 
+        color: white !important; 
+        transform: translateY(-15px) scale(1.03) !important; 
+        box-shadow: 0 30px 60px rgba(199, 0, 106, 0.3) !important; 
+        border: 1px solid {MAGENTA_BAGO} !important; 
+    }}
+    
+    .almacen-tag {{ text-align: center; color: {MAGENTA_BAGO}; font-weight: 800; font-size: 1rem; margin-bottom: 10px; letter-spacing: 1px; }}
+    
+    /* Estilos del Sistema Interno */
+    [data-testid="stSidebar"] {{ background-color: white !important; border-right: 1px solid #eee; }}
+    [data-testid="stTable"] thead tr th {{ background-color: #2C3E50 !important; color: white !important; font-weight: bold !important; }}
+    div[data-testid="stMetric"] {{ background: white !important; border-radius: 20px !important; padding: 20px !important; border-left: 8px solid {MAGENTA_BAGO} !important; box-shadow: 0 10px 20px rgba(0,0,0,0.04) !important; }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -46,32 +55,40 @@ st.markdown("""
 if 'pagina_actual' not in st.session_state:
     st.session_state['pagina_actual'] = "inicio"
 
+# Ajuste de saludo según hora
+hora_ajustada = (datetime.now() - timedelta(hours=5)).hour
+if 5 <= hora_ajustada < 12:
+    saludo_txt = "☀️ Buenos días"
+elif 12 <= hora_ajustada < 19:
+    saludo_txt = "🌤️ Buenas tardes"
+else:
+    saludo_txt = "🌙 Buenas noches"
+
 # ---------------------------------------------------------
-# PANTALLA DE INICIO (ESTILO IMAGEN)
+# PANTALLA 1: INICIO (UI/UX PRO)
 # ---------------------------------------------------------
 if st.session_state['pagina_actual'] == "inicio":
-    st.markdown("<p style='text-align:center; color:#bdc3c7; margin-top:50px; letter-spacing:2px;'>👋 BUENAS TARDES, EQUIPO BAGÓ</p>", unsafe_allow_html=True)
-    st.markdown("<h1 class='main-title'>Laboratorios Bagó</h1>", unsafe_allow_html=True)
-    st.markdown("<p class='sub-title'>Intel-Stock Management</p>", unsafe_allow_html=True)
-
-    _, col_btn1, col_btn2, _ = st.columns([1, 2, 2, 1])
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    st.markdown(f'<p class="welcome-text">{saludo_txt}, Equipo Bagó</p>', unsafe_allow_html=True)
+    st.markdown('<p class="main-title">Laboratorios Bagó</p>', unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align:center; color:#555; font-weight:300; margin-bottom:60px;'>Intel-Stock Management</h3>", unsafe_allow_html=True)
     
-    with col_btn1:
-        st.markdown("<p class='almacen-tag'>ALMACÉN 1010</p>", unsafe_allow_html=True)
-        if st.button("📦 MATERIAL DE EMPAQUE"):
+    _, col_l, col_r, _ = st.columns([2, 3, 3, 2])
+    
+    with col_l:
+        st.markdown(f'<p class="almacen-tag">ALMACÉN 1010</p>', unsafe_allow_html=True)
+        if st.button("📦\n\n MATERIAL DE EMPAQUE"):
             st.session_state['pagina_actual'] = "sistema"
             st.rerun()
-
-    with col_btn2:
-        st.markdown("<p class='almacen-tag'>ALMACÉN 1070</p>", unsafe_allow_html=True)
-        if st.button("🔢 MATERIAL PROMOCIONAL"):
+            
+    with col_r:
+        st.markdown(f'<p class="almacen-tag">ALMACÉN 1070</p>', unsafe_allow_html=True)
+        if st.button("🔢\n\nMATERIAL PROMOCIONAL"):
             st.session_state['pagina_actual'] = "sistema"
             st.rerun()
-
- 
 
 # ---------------------------------------------------------
-# SISTEMA PRINCIPAL (TU CÓDIGO ORIGINAL INTACTO)
+# PANTALLA 2: SISTEMA PRINCIPAL
 # ---------------------------------------------------------
 elif st.session_state['pagina_actual'] == "sistema":
     
@@ -94,14 +111,14 @@ elif st.session_state['pagina_actual'] == "sistema":
         except: return None
 
     st.title("📊 Control de Liquidación Logística")
-    tabs = st.tabs(["🚀 Liquidación Mensual", "🔍 Detalle de Carga Actual", "⚙️ Configurar Maestros", "🗄️ Historial"])
+    tabs = st.tabs(["🚀 Liquidación Mensual", "🔍 Detalle Actual", "⚙️ Configurar Maestros", "🗄️ Historial"])
 
     m_gp = cargar_maestro(PATH_GP)
     m_costos = cargar_maestro(PATH_COSTOS)
 
-    # --- PESTAÑA 1: LIQUIDACIÓN ---
-    with tabs[0]:
-        if m_gp is None or m_costos is None: st.warning("⚠️ Cargue los maestros en la pestaña Configurar.")
+    with tabs[0]: # LIQUIDACIÓN
+        if m_gp is None or m_costos is None: 
+            st.warning("⚠️ Cargue los maestros en la pestaña Configurar.")
         else:
             c1, c2 = st.columns([1, 2])
             with c1: mes_sel = st.selectbox("Mes", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"])
@@ -114,14 +131,15 @@ elif st.session_state['pagina_actual'] == "sistema":
                     df_c['CODIGO'] = df_c['CODIGO'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                     df_c['DESCRIPCIÓN ZONA'] = df_c['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
                     
-                    col_id_gp = [c for c in m_gp.columns if 'CODIGO' in c][0]
+                    # Normalización GP
+                    col_id_gp = [c for c in m_gp.columns if 'CODIGO' in c.upper()][0]
                     m_gp_clean = m_gp.copy()
                     m_gp_clean[col_id_gp] = m_gp_clean[col_id_gp].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                     m_gp_clean = m_gp_clean.drop_duplicates(subset=[col_id_gp])
                     
+                    # Normalización Costos
                     m_costos_clean = m_costos.copy()
                     m_costos_clean.columns = m_costos_clean.columns.str.strip().str.upper()
-                    
                     renames = {}
                     for col in m_costos_clean.columns:
                         if "PREP" in col: renames[col] = "PRECIO_PREP"
@@ -132,6 +150,7 @@ elif st.session_state['pagina_actual'] == "sistema":
                     m_costos_clean['DESCRIPCIÓN ZONA'] = m_costos_clean['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
                     m_costos_clean = m_costos_clean.drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
                     
+                    # Cruce y Cálculos
                     res = pd.merge(df_c, m_gp_clean[[col_id_gp, 'GP', 'TIPO']], left_on='CODIGO', right_on=col_id_gp, how='left')
                     res = pd.merge(res, m_costos_clean[['DESCRIPCIÓN ZONA', 'PRECIO_PREP', 'PRECIO_TRANS']], on='DESCRIPCIÓN ZONA', how='left')
                     
@@ -161,53 +180,31 @@ elif st.session_state['pagina_actual'] == "sistema":
                     for col in summary.columns[1:]: tot[col] = summary[col].sum()
                     summary_f = pd.concat([summary, pd.DataFrame([tot])], ignore_index=True)
 
-                    st.table(summary_f.style.format(precision=2).set_properties(**{'background-color': '#2C3E50', 'color': 'white', 'font-weight': 'bold'}, subset=pd.IndexSlice[summary_f.index[-1], :]))
-                    
+                    st.table(summary_f.style.format(precision=2))
                     st.session_state['res_actual'] = res
                     st.session_state['mes_actual'] = mes_sel
-                    if st.button("💾 Guardar en Historial"):
-                        res['MES_REPORTE'] = mes_sel
-                        res['FECHA_REGISTRO'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        pd.concat([pd.read_csv(HISTORICO_FILE) if os.path.exists(HISTORICO_FILE) else pd.DataFrame(), res], ignore_index=True).to_csv(HISTORICO_FILE, index=False)
-                        st.success("Guardado.")
 
-    # --- PESTAÑA 2: DETALLE (KPIs RESTAURADOS) ---
-    with tabs[1]:
+    with tabs[1]: # DETALLE
         if 'res_actual' in st.session_state:
             df_d = st.session_state['res_actual']
-            st.subheader(f"📑 Auditoría Detallada: {st.session_state['mes_actual']}")
             k1, k2, k3, k4, k5 = st.columns(5)
             k1.metric("Bultos", f"{df_d['BULTOS'].sum():,.0f}")
             k2.metric("Total Prep.", f"$ {df_d['TOTAL PREPARACION'].sum():,.2f}")
             k3.metric("Total Trans.", f"$ {df_d['TOTAL TRANSPORTE'].sum():,.2f}")
             k4.metric("Valor Neto", f"$ {df_d['VALOR_LOGISTICA'].sum():,.2f}")
             k5.metric("Total c/ IVA", f"$ {df_d['TOTAL CON IVA'].sum():,.2f}")
-            st.markdown("---")
-            st.dataframe(df_d, use_container_width=True, height=450)
-        else: st.info("Procese un archivo primero.")
+            st.dataframe(df_d, use_container_width=True)
 
-    # --- PESTAÑAS 3 Y 4 ---
-    with tabs[2]:
-        st.header("⚙️ Configuración")
-        ca, cb = st.columns(2)
-        with ca:
-            ug = st.file_uploader("Maestro GP", type=['xlsx', 'xls', 'csv'], key="maestro_gp")
+    with tabs[2]: # CONFIG
+        st.header("⚙️ Configuración de Maestros")
+        c_a, c_b = st.columns(2)
+        with c_a:
+            ug = st.file_uploader("Maestro GP", type=['xlsx', 'xls', 'csv'])
             if ug:
                 d = leer_archivo(ug); d.columns = d.columns.str.strip().str.upper()
                 guardar_maestro(d, PATH_GP); st.success("GP Guardado.")
-        with cb:
-            uc = st.file_uploader("Maestro Costos", type=['xlsx', 'xls', 'csv'], key="maestro_costos")
+        with c_b:
+            uc = st.file_uploader("Maestro Costos", type=['xlsx', 'xls', 'csv'])
             if uc:
                 d = leer_archivo(uc); d.columns = d.columns.str.strip().str.upper()
                 guardar_maestro(d, PATH_COSTOS); st.success("Costos Guardado.")
-
-    with tabs[3]:
-        if os.path.exists(HISTORICO_FILE):
-            h = pd.read_csv(HISTORICO_FILE)
-            st.subheader("📋 Historial")
-            m_del = st.selectbox("Mes a borrar:", sorted(h['MES_REPORTE'].unique()))
-            if st.button("❌ Eliminar Periodo"):
-                h[h['MES_REPORTE'] != m_del].to_csv(HISTORICO_FILE, index=False); st.rerun()
-            st.dataframe(h, use_container_width=True)
-
-
