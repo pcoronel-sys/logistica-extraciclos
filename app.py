@@ -69,7 +69,7 @@ else:
 # ---------------------------------------------------------
 if st.session_state['pagina_actual'] == "inicio":
     st.markdown("<br><br>", unsafe_allow_html=True)
-    st.markdown(f'<p class="welcome-text">{saludo_txt}, Equipo Bagó</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="welcome-text">{saludo_txt},</p>', unsafe_allow_html=True)
     st.markdown('<p class="main-title">Laboratorios Bagó</p>', unsafe_allow_html=True)
     st.markdown("<h3 style='text-align:center; color:#555; font-weight:300; margin-bottom:60px;'>SISTEMA DE CONCILIACION DE EXTRA CICLOS </h3>", unsafe_allow_html=True)
     
