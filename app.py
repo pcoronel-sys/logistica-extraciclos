@@ -63,10 +63,9 @@ def leer_archivo_protegido(archivo):
 
 # --- NAVEGACIÓN ---
 st.title("🚀 Gestión Logística Inteligente - Bagó")
-# Añadida la cuarta pestaña "Detalle de Carga Actual"
 tabs = st.tabs(["📊 Liquidación Mensual", "🔍 Detalle de Carga Actual", "⚙️ Configurar Maestros", "🗄️ Historial"])
 
-# --- PESTAÑA 3: CONFIGURAR MAESTROS (Movida a la posición 3) ---
+# --- PESTAÑA 3: CONFIGURAR MAESTROS ---
 with tabs[2]:
     st.header("⚙️ Actualización de Bases Maestras")
     c1, c2 = st.columns(2)
@@ -136,7 +135,11 @@ with tabs[0]:
                     
                     for col in ['BULTOS', 'PREPARACION', 'TRANSPORTE']:
                         res[col] = pd.to_numeric(res[col], errors='coerce').fillna(0)
-                    res['VALOR_LOGISTICA'] = (res['PREPARACION'] + res['TRANSPORTE']) * res['BULTOS']
+                    
+                    # CÁLCULOS ADICIONALES PARA EL DETALLE
+                    res['TOTAL PREPARACION'] = res['PREPARACION'] * res['BULTOS']
+                    res['TOTAL TRANSPORTE'] = res['TRANSPORTE'] * res['BULTOS']
+                    res['VALOR_LOGISTICA'] = res['TOTAL PREPARACION'] + res['TOTAL TRANSPORTE']
 
                     # --- REPORTE CONSOLIDADO ---
                     st.markdown("---")
@@ -160,36 +163,39 @@ with tabs[0]:
 
                     st.dataframe(summary_final.style.format(precision=2), use_container_width=True)
                     
-                    # Guardar el procesamiento en el estado de la sesión para la pestaña de detalle
+                    # Guardar el procesamiento en el estado de la sesión
                     st.session_state['res_actual'] = res
                     st.session_state['mes_actual'] = mes_sel
                     
                     if st.button(f"💾 Guardar datos de {mes_sel}"):
                         res['MES_REPORTE'] = mes_sel
                         res['FECHA_REGISTRO'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        pd.concat([pd.read_csv(HISTORICO_FILE), res] if os.path.exists(HISTORICO_FILE) else [res], ignore_index=True).to_csv(HISTORICO_FILE, index=False)
+                        pd.concat([pd.read_csv(HISTORICO_FILE) if os.path.exists(HISTORICO_FILE) else pd.DataFrame(), res], ignore_index=True).to_csv(HISTORICO_FILE, index=False)
                         st.success("Guardado en Histórico.")
 
-# --- PESTAÑA 2: DETALLE DE CARGA ACTUAL (NUEVA) ---
+# --- PESTAÑA 2: DETALLE DE CARGA ACTUAL ---
 with tabs[1]:
     st.header("🔍 Detalle de la Carga Procesada")
     if 'res_actual' in st.session_state:
         df_detalle = st.session_state['res_actual']
-        st.write(f"Mostrando el detalle fila por fila para el mes de **{st.session_state['mes_actual']}**")
+        st.write(f"Mostrando el detalle para el mes de **{st.session_state['mes_actual']}**")
         
-        # Filtro de búsqueda para el detalle
-        bus_det = st.text_input("🔍 Filtrar detalle por Gerente o Producto:", "", key="bus_det")
-        if bus_det:
-            # Buscamos en GP o en CODIGO o en DESCRIPCIÓN (si existe)
-            df_det_view = df_detalle[df_detalle.astype(str).apply(lambda x: x.str.contains(bus_det.upper())).any(axis=1)]
-        else:
-            df_det_view = df_detalle
+        bus_det = st.text_input("🔍 Filtrar detalle:", "", key="bus_det")
+        df_det_view = df_detalle[df_detalle.astype(str).apply(lambda x: x.str.contains(bus_det.upper())).any(axis=1)] if bus_det else df_detalle
 
-        # Fila de totales para el detalle
-        tot_det = {'CODIGO': 'TOTALES', 'VALOR_LOGISTICA': df_det_view['VALOR_LOGISTICA'].sum(), 'BULTOS': df_det_view['BULTOS'].sum()}
+        # Fila de totales para el detalle (Añadiendo las nuevas columnas multiplicadas)
+        tot_det = {
+            'CODIGO': 'TOTALES', 
+            'BULTOS': df_det_view['BULTOS'].sum(),
+            'TOTAL PREPARACION': df_det_view['TOTAL PREPARACION'].sum(),
+            'TOTAL TRANSPORTE': df_det_view['TOTAL TRANSPORTE'].sum(),
+            'VALOR_LOGISTICA': df_det_view['VALOR_LOGISTICA'].sum()
+        }
         df_det_final = pd.concat([df_det_view, pd.DataFrame([tot_det])], ignore_index=True).fillna("")
         
-        st.dataframe(df_det_final, use_container_width=True)
+        # Formatear columnas de dinero
+        cols_dinero = ['PREPARACION', 'TRANSPORTE', 'TOTAL PREPARACION', 'TOTAL TRANSPORTE', 'VALOR_LOGISTICA']
+        st.dataframe(df_det_final.style.format({c: "{:.2f}" for c in cols_dinero if c in df_det_final.columns}), use_container_width=True)
     else:
         st.info("Primero sube y procesa un archivo en la pestaña 'Liquidación Mensual'.")
 
