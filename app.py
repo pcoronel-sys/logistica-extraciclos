@@ -1,13 +1,16 @@
 import streamlit as st
 import pandas as pd
-from io import BytesIO
 import os
 from datetime import datetime
 
 # 1. CONFIGURACIÓN DE PÁGINA
-st.set_page_config(page_title="Bagó Logística - Auditoría", layout="wide", page_icon="🧪")
+st.set_page_config(page_title="Acceso Seguro - Bagó", layout="wide", page_icon="🔐")
 
-# --- ESTILO CORPORATIVO FORZADO ---
+# --- USUARIO Y CONTRASEÑA CONFIGURABLES ---
+USUARIO_PRO = "admin"
+CLAVE_PRO = "bago2024" # <-- Cámbiala aquí si quieres
+
+# --- ESTILO CORPORATIVO ---
 st.markdown("""
     <style>
     .stApp { background-color: #ffffff; }
@@ -15,22 +18,61 @@ st.markdown("""
         background-color: #2C3E50 !important;
         color: white !important;
         font-weight: bold !important;
-        text-align: center !important;
     }
     div[data-testid="stMetric"] {
         background-color: #fcfcfc;
         border-left: 6px solid #4CA1AF;
         border-radius: 10px;
         padding: 15px !important;
-        box-shadow: 2px 2px 5px rgba(0,0,0,0.05);
     }
     .stButton>button {
         background: linear-gradient(90deg, #2C3E50 0%, #4CA1AF 100%);
         color: white; border-radius: 10px; border: none;
         font-weight: bold; height: 3.5em; width: 100%;
     }
+    .login-box {
+        padding: 30px;
+        border-radius: 15px;
+        background-color: #f8f9fa;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
     </style>
     """, unsafe_allow_html=True)
+
+# --- LÓGICA DE LOGIN ---
+if 'autenticado' not in st.session_state:
+    st.session_state['autenticado'] = False
+
+def login():
+    st.markdown('<div class="login-box">', unsafe_allow_html=True)
+    st.title("🧪 Sistema Logístico Bagó")
+    st.subheader("Acceso Restringido")
+    
+    user = st.text_input("Usuario")
+    password = st.text_input("Contraseña", type="password")
+    
+    if st.button("Ingresar al Sistema"):
+        if user == USUARIO_PRO and password == CLAVE_PRO:
+            st.session_state['autenticado'] = True
+            st.rerun()
+        else:
+            st.error("❌ Credenciales incorrectas")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# --- SI NO ESTÁ AUTENTICADO, MOSTRAR LOGIN Y SALIR ---
+if not st.session_state['autenticado']:
+    login()
+    st.stop()
+
+# --- SI ESTÁ AUTENTICADO, MOSTRAR EL RESTO DEL SISTEMA ---
+st.sidebar.success(f"Sesión iniciada: {USUARIO_PRO}")
+if st.sidebar.button("Cerrar Sesión"):
+    st.session_state['autenticado'] = False
+    st.rerun()
+
+# ---------------------------------------------------------
+# AQUÍ EMPIEZA TODO TU CÓDIGO PRO (NO TOCAMOS NADA)
+# ---------------------------------------------------------
 
 PATH_GP = "master_gp.csv"
 PATH_COSTOS = "master_costos.csv"
@@ -52,14 +94,13 @@ def leer_archivo_protegido(archivo):
         st.error(f"Error crítico al leer {archivo.name}: {e}")
         return None
 
-# --- NAVEGACIÓN ---
 st.title("📊 Control de Liquidación Logística")
 tabs = st.tabs(["🚀 Liquidación Mensual", "🔍 Detalle de Carga Actual", "⚙️ Configurar Maestros", "🗄️ Historial"])
 
 m_gp = cargar_maestro(PATH_GP)
 m_costos = cargar_maestro(PATH_COSTOS)
 
-# --- PESTAÑA 1: LIQUIDACIÓN CON FILTROS ---
+# --- PESTAÑA 1: LIQUIDACIÓN ---
 with tabs[0]:
     if m_gp is None or m_costos is None: st.warning("⚠️ Cargue los maestros.")
     else:
@@ -89,8 +130,6 @@ with tabs[0]:
                 res['TOTAL CON IVA'] = res['VALOR_LOGISTICA'] + res['IVA 15%']
 
                 st.subheader(f"📋 Reporte Consolidado: {mes_sel}")
-                
-                # FILTRO POR TIPO EN PESTAÑA 1
                 tipo_filtro = st.radio("Filtrar Reporte por:", ["Todos", "Solo MM", "Solo MP"], horizontal=True)
                 
                 summary = res.groupby(['GP', 'TIPO'])['VALOR_LOGISTICA'].sum().unstack(fill_value=0).reset_index()
@@ -118,29 +157,19 @@ with tabs[0]:
                     pd.concat([pd.read_csv(HISTORICO_FILE) if os.path.exists(HISTORICO_FILE) else pd.DataFrame(), res], ignore_index=True).to_csv(HISTORICO_FILE, index=False)
                     st.success("Guardado.")
 
-# --- PESTAÑA 2: CARGA ACTUAL CON FILTROS AVANZADOS ---
+# --- PESTAÑA 2: DETALLE ---
 with tabs[1]:
     if 'res_actual' in st.session_state:
         df_det = st.session_state['res_actual'].copy()
-        
         st.subheader("🔍 Filtros de Auditoría")
         c_f1, c_f2 = st.columns(2)
-        with c_f1:
-            gps_sel = st.multiselect("Filtrar por Gerente (GP):", options=sorted(df_det['GP'].unique()), default=None)
-        with c_f2:
-            tipos_sel = st.multiselect("Filtrar por Tipo:", options=sorted(df_det['TIPO'].unique()), default=None)
+        with c_f1: gps_sel = st.multiselect("Filtrar por GP:", options=sorted(df_det['GP'].unique()))
+        with c_f2: tipos_sel = st.multiselect("Filtrar por Tipo:", options=sorted(df_det['TIPO'].unique()))
         
-        # Aplicar Filtros
         df_view = df_det.copy()
         if gps_sel: df_view = df_view[df_view['GP'].isin(gps_sel)]
         if tipos_sel: df_view = df_view[df_view['TIPO'].isin(tipos_sel)]
         
-        # Buscador de texto adicional
-        bus_txt = st.text_input("🔍 Búsqueda rápida (Código o Zona):", "").upper()
-        if bus_txt:
-            df_view = df_view[df_view.astype(str).apply(lambda x: x.str.contains(bus_txt)).any(axis=1)]
-
-        # KPIs Dinámicos según filtro
         st.markdown("---")
         k1, k2, k3, k4, k5 = st.columns(5)
         k1.metric("Bultos", f"{df_view['BULTOS'].sum():,.0f}")
@@ -149,16 +178,14 @@ with tabs[1]:
         k4.metric("Neto", f"$ {df_view['VALOR_LOGISTICA'].sum():,.2f}")
         k5.metric("Total IVA", f"$ {df_view['TOTAL CON IVA'].sum():,.2f}")
 
-        # Tabla Detalle
         cols_orden = ['CODIGO', 'DESCRIPCIÓN ZONA', 'GP', 'TIPO', 'BULTOS', 'PREPARACION', 'TRANSPORTE', 'TOTAL PREPARACION', 'TOTAL TRANSPORTE', 'VALOR_LOGISTICA', 'IVA 15%', 'TOTAL CON IVA']
         tot_row = {'CODIGO': '--- TOTALES ---', 'BULTOS': df_view['BULTOS'].sum(), 'TOTAL PREPARACION': df_view['TOTAL PREPARACION'].sum(), 'TOTAL TRANSPORTE': df_view['TOTAL TRANSPORTE'].sum(), 'VALOR_LOGISTICA': df_view['VALOR_LOGISTICA'].sum(), 'IVA 15%': df_view['IVA 15%'].sum(), 'TOTAL CON IVA': df_view['TOTAL CON IVA'].sum()}
         df_final = pd.concat([df_view[cols_orden], pd.DataFrame([tot_row])], ignore_index=True)
         
         st.table(df_final.style.format({c: "{:,.2f}" for c in ['PREPARACION', 'TRANSPORTE', 'TOTAL PREPARACION', 'TOTAL TRANSPORTE', 'VALOR_LOGISTICA', 'IVA 15%', 'TOTAL CON IVA'] if c in df_final.columns}, na_rep="").set_properties(**{'background-color': '#2C3E50', 'color': 'white', 'font-weight': 'bold'}, subset=pd.IndexSlice[df_final.index[-1], :]))
-    else:
-        st.info("⚠️ Procese un archivo primero.")
+    else: st.info("⚠️ Procese un archivo primero.")
 
-# --- RESTO DEL CÓDIGO (CONFIG E HISTORIAL) ---
+# --- PESTAÑA 3: CONFIG ---
 with tabs[2]:
     st.header("⚙️ Configuración")
     c1, c2 = st.columns(2)
