@@ -11,26 +11,19 @@ st.set_page_config(page_title="Bagó Logística - Auditoría", layout="wide", pa
 st.markdown("""
     <style>
     .stApp { background-color: #ffffff; }
-    
-    /* ENCABEZADOS DE TABLAS */
     [data-testid="stTable"] thead tr th {
         background-color: #2C3E50 !important;
         color: white !important;
         font-weight: bold !important;
         text-align: center !important;
-        font-size: 13px;
     }
-    
-    /* TARJETAS DE MÉTRICAS (KPIs) */
     div[data-testid="stMetric"] {
         background-color: #fcfcfc;
-        border: 1px solid #eeeeee;
         border-left: 6px solid #4CA1AF;
         border-radius: 10px;
         padding: 15px !important;
         box-shadow: 2px 2px 5px rgba(0,0,0,0.05);
     }
-
     .stButton>button {
         background: linear-gradient(90deg, #2C3E50 0%, #4CA1AF 100%);
         color: white; border-radius: 10px; border: none;
@@ -66,7 +59,7 @@ tabs = st.tabs(["🚀 Liquidación Mensual", "🔍 Detalle de Carga Actual", "�
 m_gp = cargar_maestro(PATH_GP)
 m_costos = cargar_maestro(PATH_COSTOS)
 
-# --- PESTAÑA 1 (SIN CAMBIOS) ---
+# --- PESTAÑA 1: LIQUIDACIÓN CON FILTROS ---
 with tabs[0]:
     if m_gp is None or m_costos is None: st.warning("⚠️ Cargue los maestros.")
     else:
@@ -96,10 +89,18 @@ with tabs[0]:
                 res['TOTAL CON IVA'] = res['VALOR_LOGISTICA'] + res['IVA 15%']
 
                 st.subheader(f"📋 Reporte Consolidado: {mes_sel}")
+                
+                # FILTRO POR TIPO EN PESTAÑA 1
+                tipo_filtro = st.radio("Filtrar Reporte por:", ["Todos", "Solo MM", "Solo MP"], horizontal=True)
+                
                 summary = res.groupby(['GP', 'TIPO'])['VALOR_LOGISTICA'].sum().unstack(fill_value=0).reset_index()
                 for c in ['MM', 'MP']: 
                     if c not in summary.columns: summary[c] = 0.0
-                summary['SUBTOTAL'] = summary['MM'] + summary['MP']
+                
+                if tipo_filtro == "Solo MM": summary = summary[['GP', 'MM']]
+                elif tipo_filtro == "Solo MP": summary = summary[['GP', 'MP']]
+                
+                summary['SUBTOTAL'] = summary.iloc[:, 1:].sum(axis=1)
                 summary['IVA 15%'] = summary['SUBTOTAL'] * 0.15
                 summary['TOTAL'] = summary['SUBTOTAL'] + summary['IVA 15%']
 
@@ -107,11 +108,8 @@ with tabs[0]:
                 for col in summary.columns[1:]: tot[col] = summary[col].sum()
                 summary_final = pd.concat([summary, pd.DataFrame([tot])], ignore_index=True)
 
-                st.table(
-                    summary_final.style.format(precision=2)
-                    .set_properties(**{'background-color': '#E8F6F3', 'color': '#16A085', 'font-weight': 'bold'}, subset=['TOTAL'])
-                    .set_properties(**{'background-color': '#2C3E50', 'color': 'white', 'font-weight': 'bold'}, subset=pd.IndexSlice[summary_final.index[-1], :])
-                )
+                st.table(summary_final.style.format(precision=2).set_properties(**{'background-color': '#2C3E50', 'color': 'white', 'font-weight': 'bold'}, subset=pd.IndexSlice[summary_final.index[-1], :]))
+                
                 st.session_state['res_actual'] = res
                 st.session_state['mes_actual'] = mes_sel
                 if st.button(f"💾 Guardar Periodo {mes_sel}"):
@@ -120,49 +118,47 @@ with tabs[0]:
                     pd.concat([pd.read_csv(HISTORICO_FILE) if os.path.exists(HISTORICO_FILE) else pd.DataFrame(), res], ignore_index=True).to_csv(HISTORICO_FILE, index=False)
                     st.success("Guardado.")
 
-# --- PESTAÑA 2: DETALLE (CON MÉTRICA DE TOTAL LOGÍSTICA AÑADIDA) ---
+# --- PESTAÑA 2: CARGA ACTUAL CON FILTROS AVANZADOS ---
 with tabs[1]:
     if 'res_actual' in st.session_state:
         df_det = st.session_state['res_actual'].copy()
         
-        st.subheader(f"📑 Auditoría Detallada - {st.session_state['mes_actual']}")
+        st.subheader("🔍 Filtros de Auditoría")
+        c_f1, c_f2 = st.columns(2)
+        with c_f1:
+            gps_sel = st.multiselect("Filtrar por Gerente (GP):", options=sorted(df_det['GP'].unique()), default=None)
+        with c_f2:
+            tipos_sel = st.multiselect("Filtrar por Tipo:", options=sorted(df_det['TIPO'].unique()), default=None)
         
-        # MÉTRICAS CON "TOTAL LOGÍSTICA" AÑADIDO
-        k1, k2, k3, k4, k5 = st.columns(5)
-        k1.metric("Bultos Totales", f"{df_det['BULTOS'].sum():,.0f}")
-        k2.metric("Total Preparación", f"$ {df_det['TOTAL PREPARACION'].sum():,.2f}")
-        k3.metric("Total Transporte", f"$ {df_det['TOTAL TRANSPORTE'].sum():,.2f}")
-        k4.metric("Total Logística (Neto)", f"$ {df_det['VALOR_LOGISTICA'].sum():,.2f}")
-        k5.metric("Total Final (IVA)", f"$ {df_det['TOTAL CON IVA'].sum():,.2f}")
+        # Aplicar Filtros
+        df_view = df_det.copy()
+        if gps_sel: df_view = df_view[df_view['GP'].isin(gps_sel)]
+        if tipos_sel: df_view = df_view[df_view['TIPO'].isin(tipos_sel)]
         
+        # Buscador de texto adicional
+        bus_txt = st.text_input("🔍 Búsqueda rápida (Código o Zona):", "").upper()
+        if bus_txt:
+            df_view = df_view[df_view.astype(str).apply(lambda x: x.str.contains(bus_txt)).any(axis=1)]
+
+        # KPIs Dinámicos según filtro
         st.markdown("---")
-        
-        bus_det = st.text_input("🔍 Buscar en el detalle:", "").upper()
-        df_view = df_det[df_det.astype(str).apply(lambda x: x.str.contains(bus_det)).any(axis=1)] if bus_det else df_det
+        k1, k2, k3, k4, k5 = st.columns(5)
+        k1.metric("Bultos", f"{df_view['BULTOS'].sum():,.0f}")
+        k2.metric("Prep.", f"$ {df_view['TOTAL PREPARACION'].sum():,.2f}")
+        k3.metric("Trans.", f"$ {df_view['TOTAL TRANSPORTE'].sum():,.2f}")
+        k4.metric("Neto", f"$ {df_view['VALOR_LOGISTICA'].sum():,.2f}")
+        k5.metric("Total IVA", f"$ {df_view['TOTAL CON IVA'].sum():,.2f}")
 
+        # Tabla Detalle
         cols_orden = ['CODIGO', 'DESCRIPCIÓN ZONA', 'GP', 'TIPO', 'BULTOS', 'PREPARACION', 'TRANSPORTE', 'TOTAL PREPARACION', 'TOTAL TRANSPORTE', 'VALOR_LOGISTICA', 'IVA 15%', 'TOTAL CON IVA']
+        tot_row = {'CODIGO': '--- TOTALES ---', 'BULTOS': df_view['BULTOS'].sum(), 'TOTAL PREPARACION': df_view['TOTAL PREPARACION'].sum(), 'TOTAL TRANSPORTE': df_view['TOTAL TRANSPORTE'].sum(), 'VALOR_LOGISTICA': df_view['VALOR_LOGISTICA'].sum(), 'IVA 15%': df_view['IVA 15%'].sum(), 'TOTAL CON IVA': df_view['TOTAL CON IVA'].sum()}
+        df_final = pd.concat([df_view[cols_orden], pd.DataFrame([tot_row])], ignore_index=True)
         
-        tot_row = {
-            'CODIGO': '--- TOTALES ---',
-            'BULTOS': df_view['BULTOS'].sum(),
-            'TOTAL PREPARACION': df_view['TOTAL PREPARACION'].sum(),
-            'TOTAL TRANSPORTE': df_view['TOTAL TRANSPORTE'].sum(),
-            'VALOR_LOGISTICA': df_view['VALOR_LOGISTICA'].sum(),
-            'IVA 15%': df_view['IVA 15%'].sum(),
-            'TOTAL CON IVA': df_view['TOTAL CON IVA'].sum()
-        }
-        
-        df_det_final = pd.concat([df_view[cols_orden], pd.DataFrame([tot_row])], ignore_index=True)
-        cols_money = ['PREPARACION', 'TRANSPORTE', 'TOTAL PREPARACION', 'TOTAL TRANSPORTE', 'VALOR_LOGISTICA', 'IVA 15%', 'TOTAL CON IVA']
-        
-        st.table(
-            df_det_final.style.format({c: "{:,.2f}" for c in cols_money if c in df_det_final.columns}, na_rep="")
-            .set_properties(**{'background-color': '#E8F6F3', 'color': '#16A085', 'font-weight': 'bold'}, subset=['TOTAL CON IVA'])
-            .set_properties(**{'background-color': '#2C3E50', 'color': 'white', 'font-weight': 'bold'}, subset=pd.IndexSlice[df_det_final.index[-1], :])
-        )
+        st.table(df_final.style.format({c: "{:,.2f}" for c in ['PREPARACION', 'TRANSPORTE', 'TOTAL PREPARACION', 'TOTAL TRANSPORTE', 'VALOR_LOGISTICA', 'IVA 15%', 'TOTAL CON IVA'] if c in df_final.columns}, na_rep="").set_properties(**{'background-color': '#2C3E50', 'color': 'white', 'font-weight': 'bold'}, subset=pd.IndexSlice[df_final.index[-1], :]))
     else:
-        st.info("⚠️ Procese un archivo en la pestaña 'Liquidación Mensual'.")
+        st.info("⚠️ Procese un archivo primero.")
 
+# --- RESTO DEL CÓDIGO (CONFIG E HISTORIAL) ---
 with tabs[2]:
     st.header("⚙️ Configuración")
     c1, c2 = st.columns(2)
