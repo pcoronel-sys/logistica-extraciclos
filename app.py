@@ -7,29 +7,30 @@ from datetime import datetime
 # 1. CONFIGURACIÓN DE PÁGINA
 st.set_page_config(page_title="Bagó Logística Pro", layout="wide", page_icon="🧪")
 
-# --- ESTILO CORPORATIVO AJUSTADO ---
+# --- ESTILO CORPORATIVO PREMIUM ---
 st.markdown("""
     <style>
     .stApp { background-color: #ffffff; }
     
-    /* Encabezados de tablas Streamlit */
+    /* Encabezados de tablas con color sobrio */
     thead tr th {
-        background-color: #E10078 !important;
+        background-color: #2C3E50 !important;
         color: white !important;
         font-weight: bold !important;
+        text-align: center !important;
     }
     
     div[data-testid="stMetric"] {
         background: #ffffff;
         border-radius: 12px;
         border: 1px solid #f0f0f0;
-        border-top: 5px solid #E10078;
+        border-top: 5px solid #2C3E50;
         box-shadow: 0 4px 6px rgba(0,0,0,0.02);
         padding: 20px !important;
     }
 
     .stButton>button {
-        background: linear-gradient(90deg, #E10078 0%, #8E004C 100%);
+        background: linear-gradient(90deg, #2C3E50 0%, #4CA1AF 100%);
         color: white; border-radius: 10px; border: none;
         font-weight: bold; height: 3em; width: 100%;
     }
@@ -57,8 +58,8 @@ def leer_archivo_protegido(archivo):
         return None
 
 # --- NAVEGACIÓN ---
-st.title("🚀 Gestión Logística Inteligente - Bagó")
-tabs = st.tabs(["📊 Liquidación Mensual", "🔍 Detalle de Carga Actual", "⚙️ Configurar Maestros", "🗄️ Historial"])
+st.title("📊 Gestión Logística Bagó")
+tabs = st.tabs(["🚀 Liquidación Mensual", "🔍 Detalle de Carga Actual", "⚙️ Configurar Maestros", "🗄️ Historial"])
 
 with tabs[2]:
     st.header("⚙️ Actualización de Bases Maestras")
@@ -98,48 +99,46 @@ with tabs[0]:
                 df_c['DESCRIPCIÓN ZONA'] = df_c['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
                 m_costos['DESCRIPCIÓN ZONA'] = m_costos['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
 
-                if not df_c[~df_c['CODIGO'].isin(m_gp[col_id_gp])]['CODIGO'].empty or not df_c[~df_c['DESCRIPCIÓN ZONA'].isin(m_costos['DESCRIPCIÓN ZONA'])]['DESCRIPCIÓN ZONA'].empty:
-                    st.error("🛑 Hay errores en el semáforo. Revisa los códigos/zonas faltantes.")
-                else:
-                    res = pd.merge(df_c, m_gp.drop_duplicates(subset=[col_id_gp])[[col_id_gp, 'GP', 'TIPO']], left_on='CODIGO', right_on=col_id_gp, how='left')
-                    m_c_c = m_costos.rename(columns={'PRECIO_PREP': 'PREPARACION', 'PRECIO_TRANS': 'TRANSPORTE'}).drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
-                    res = pd.merge(res, m_c_c[['DESCRIPCIÓN ZONA', 'PREPARACION', 'TRANSPORTE']], on='DESCRIPCIÓN ZONA', how='left')
-                    
-                    for col in ['BULTOS', 'PREPARACION', 'TRANSPORTE']: res[col] = pd.to_numeric(res[col], errors='coerce').fillna(0)
-                    
-                    res['TOTAL PREPARACION'] = res['PREPARACION'] * res['BULTOS']
-                    res['TOTAL TRANSPORTE'] = res['TRANSPORTE'] * res['BULTOS']
-                    res['VALOR_LOGISTICA'] = res['TOTAL PREPARACION'] + res['TOTAL TRANSPORTE']
-                    res['IVA 15%'] = res['VALOR_LOGISTICA'] * 0.15
-                    res['TOTAL CON IVA'] = res['VALOR_LOGISTICA'] + res['IVA 15%']
+                # CRUCE Y PROCESAMIENTO
+                res = pd.merge(df_c, m_gp.drop_duplicates(subset=[col_id_gp])[[col_id_gp, 'GP', 'TIPO']], left_on='CODIGO', right_on=col_id_gp, how='left')
+                m_c_c = m_costos.rename(columns={'PRECIO_PREP': 'PREPARACION', 'PRECIO_TRANS': 'TRANSPORTE'}).drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
+                res = pd.merge(res, m_c_c[['DESCRIPCIÓN ZONA', 'PREPARACION', 'TRANSPORTE']], on='DESCRIPCIÓN ZONA', how='left')
+                
+                for col in ['BULTOS', 'PREPARACION', 'TRANSPORTE']: res[col] = pd.to_numeric(res[col], errors='coerce').fillna(0)
+                
+                res['TOTAL PREPARACION'] = res['PREPARACION'] * res['BULTOS']
+                res['TOTAL TRANSPORTE'] = res['TRANSPORTE'] * res['BULTOS']
+                res['VALOR_LOGISTICA'] = res['TOTAL PREPARACION'] + res['TOTAL TRANSPORTE']
+                res['IVA 15%'] = res['VALOR_LOGISTICA'] * 0.15
+                res['TOTAL CON IVA'] = res['VALOR_LOGISTICA'] + res['IVA 15%']
 
-                    st.subheader(f"📋 Reporte de Liquidación: {mes_sel}")
-                    summary = res.groupby(['GP', 'TIPO'])['VALOR_LOGISTICA'].sum().unstack(fill_value=0).reset_index()
-                    for c in ['MM', 'MP']: 
-                        if c not in summary.columns: summary[c] = 0.0
-                    summary['SUBTOTAL'] = summary['MM'] + summary['MP']
-                    summary['IVA 15%'] = summary['SUBTOTAL'] * 0.15
-                    summary['TOTAL'] = summary['SUBTOTAL'] + summary['IVA 15%']
+                st.subheader(f"📋 Reporte de Liquidación: {mes_sel}")
+                summary = res.groupby(['GP', 'TIPO'])['VALOR_LOGISTICA'].sum().unstack(fill_value=0).reset_index()
+                for c in ['MM', 'MP']: 
+                    if c not in summary.columns: summary[c] = 0.0
+                summary['SUBTOTAL'] = summary['MM'] + summary['MP']
+                summary['IVA 15%'] = summary['SUBTOTAL'] * 0.15
+                summary['TOTAL'] = summary['SUBTOTAL'] + summary['IVA 15%']
 
-                    busqueda = st.text_input("🔍 Buscar Gerente:", "")
-                    summary_view = summary[summary['GP'].str.contains(busqueda.upper())] if busqueda else summary
-                    tot = {'GP': '--- TOTAL GENERAL ---'}
-                    for col in summary_view.columns[1:]: tot[col] = summary_view[col].sum()
-                    summary_final = pd.concat([summary_view, pd.DataFrame([tot])], ignore_index=True)
+                busqueda = st.text_input("🔍 Buscar Gerente:", "")
+                summary_view = summary[summary['GP'].str.contains(busqueda.upper())] if busqueda else summary
+                tot = {'GP': '--- TOTAL GENERAL ---'}
+                for col in summary_view.columns[1:]: tot[col] = summary_view[col].sum()
+                summary_final = pd.concat([summary_view, pd.DataFrame([tot])], ignore_index=True)
 
-                    # --- ESTILO SUAVE (Soft Pink) ---
-                    st.dataframe(
-                        summary_final.style.format(precision=2)
-                        .set_properties(**{'background-color': '#FFF0F6', 'color': '#C40068'}, subset=['TOTAL']) # Rosa muy suave
-                        .set_properties(**{'background-color': '#E10078', 'color': 'white', 'font-weight': 'bold'}, subset=pd.IndexSlice[summary_final.index[-1], :])
-                        , use_container_width=True
-                    )
-                    st.session_state['res_actual'] = res
-                    if st.button(f"💾 Guardar datos"):
-                        res['MES_REPORTE'] = mes_sel
-                        res['FECHA_REGISTRO'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        pd.concat([pd.read_csv(HISTORICO_FILE) if os.path.exists(HISTORICO_FILE) else pd.DataFrame(), res], ignore_index=True).to_csv(HISTORICO_FILE, index=False)
-                        st.success("Guardado.")
+                # --- DISEÑO SOBRIO ---
+                st.dataframe(
+                    summary_final.style.format(precision=2)
+                    .set_properties(**{'background-color': '#E8F6F3', 'color': '#16A085', 'font-weight': 'bold'}, subset=['TOTAL']) # Verde Menta Suave
+                    .set_properties(**{'background-color': '#2C3E50', 'color': 'white', 'font-weight': 'bold'}, subset=pd.IndexSlice[summary_final.index[-1], :]) # Gris Oxford Final
+                    , use_container_width=True
+                )
+                st.session_state['res_actual'] = res
+                if st.button(f"💾 Guardar datos"):
+                    res['MES_REPORTE'] = mes_sel
+                    res['FECHA_REGISTRO'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    pd.concat([pd.read_csv(HISTORICO_FILE) if os.path.exists(HISTORICO_FILE) else pd.DataFrame(), res], ignore_index=True).to_csv(HISTORICO_FILE, index=False)
+                    st.success("Guardado.")
 
 with tabs[1]:
     st.header("🔍 Detalle de Carga Actual")
@@ -151,8 +150,8 @@ with tabs[1]:
         
         st.dataframe(
             df_det_final.style.format({c: "{:.2f}" for c in cols_m if c in df_det_final.columns}, na_rep="")
-            .set_properties(**{'background-color': '#FFF0F6', 'font-weight': 'bold'}, subset=['TOTAL CON IVA'])
-            .set_properties(**{'background-color': '#E10078', 'color': 'white', 'font-weight': 'bold'}, subset=pd.IndexSlice[df_det_final.index[-1], :])
+            .set_properties(**{'background-color': '#E8F6F3', 'font-weight': 'bold'}, subset=['TOTAL CON IVA'])
+            .set_properties(**{'background-color': '#2C3E50', 'color': 'white', 'font-weight': 'bold'}, subset=pd.IndexSlice[df_det_final.index[-1], :])
             , use_container_width=True
         )
 
