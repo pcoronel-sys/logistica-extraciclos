@@ -136,10 +136,12 @@ with tabs[0]:
                     for col in ['BULTOS', 'PREPARACION', 'TRANSPORTE']:
                         res[col] = pd.to_numeric(res[col], errors='coerce').fillna(0)
                     
-                    # CÁLCULOS ADICIONALES
+                    # CÁLCULOS
                     res['TOTAL PREPARACION'] = res['PREPARACION'] * res['BULTOS']
                     res['TOTAL TRANSPORTE'] = res['TRANSPORTE'] * res['BULTOS']
                     res['VALOR_LOGISTICA'] = res['TOTAL PREPARACION'] + res['TOTAL TRANSPORTE']
+                    res['IVA 15%'] = res['VALOR_LOGISTICA'] * 0.15
+                    res['TOTAL CON IVA'] = res['VALOR_LOGISTICA'] + res['IVA 15%']
 
                     # --- REPORTE CONSOLIDADO ---
                     st.markdown("---")
@@ -170,7 +172,7 @@ with tabs[0]:
                         pd.concat([pd.read_csv(HISTORICO_FILE) if os.path.exists(HISTORICO_FILE) else pd.DataFrame(), res], ignore_index=True).to_csv(HISTORICO_FILE, index=False)
                         st.success("Guardado en Histórico.")
 
-# --- PESTAÑA 2: DETALLE DE CARGA ACTUAL (CORREGIDA) ---
+# --- PESTAÑA 2: DETALLE DE CARGA ACTUAL ---
 with tabs[1]:
     st.header("🔍 Detalle de la Carga Procesada")
     if 'res_actual' in st.session_state:
@@ -180,22 +182,21 @@ with tabs[1]:
         bus_det = st.text_input("🔍 Filtrar detalle:", "", key="bus_det")
         df_det_view = df_detalle[df_detalle.astype(str).apply(lambda x: x.str.contains(bus_det.upper())).any(axis=1)] if bus_det else df_detalle
 
-        # Preparamos la fila de totales
+        # Fila de totales para el detalle (Añadidas las nuevas columnas solicitadas)
         tot_det = {
             'CODIGO': 'TOTALES', 
             'BULTOS': df_det_view['BULTOS'].sum(),
             'TOTAL PREPARACION': df_det_view['TOTAL PREPARACION'].sum(),
             'TOTAL TRANSPORTE': df_det_view['TOTAL TRANSPORTE'].sum(),
-            'VALOR_LOGISTICA': df_det_view['VALOR_LOGISTICA'].sum()
+            'VALOR_LOGISTICA': df_det_view['VALOR_LOGISTICA'].sum(),
+            'IVA 15%': df_det_view['IVA 15%'].sum(),
+            'TOTAL CON IVA': df_det_view['TOTAL CON IVA'].sum()
         }
         
-        # Unimos la tabla con la fila de totales
         df_det_final = pd.concat([df_det_view, pd.DataFrame([tot_det])], ignore_index=True)
         
-        # --- SOLUCIÓN AL ERROR DE FORMATO ---
-        # En lugar de usar .style.format, formateamos los números directamente en el DataFrame
-        # solo en las columnas que existen y solo donde los valores son numéricos.
-        cols_dinero = ['PREPARACION', 'TRANSPORTE', 'TOTAL PREPARACION', 'TOTAL TRANSPORTE', 'VALOR_LOGISTICA']
+        # Formatear columnas numéricas para visualización
+        cols_dinero = ['PREPARACION', 'TRANSPORTE', 'TOTAL PREPARACION', 'TOTAL TRANSPORTE', 'VALOR_LOGISTICA', 'IVA 15%', 'TOTAL CON IVA']
         for c in cols_dinero:
             if c in df_det_final.columns:
                 df_det_final[c] = pd.to_numeric(df_det_final[c], errors='coerce').map('{:.2f}'.format).replace('nan', '')
