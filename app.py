@@ -21,13 +21,14 @@ st.markdown("""
         font-size: 13px;
     }
     
-    /* TARJETAS DE MÉTRICAS MEJORADAS */
+    /* TARJETAS DE MÉTRICAS (KPIs) */
     div[data-testid="stMetric"] {
         background-color: #fcfcfc;
         border: 1px solid #eeeeee;
         border-left: 6px solid #4CA1AF;
         border-radius: 10px;
         padding: 15px !important;
+        box-shadow: 2px 2px 5px rgba(0,0,0,0.05);
     }
 
     .stButton>button {
@@ -65,7 +66,7 @@ tabs = st.tabs(["🚀 Liquidación Mensual", "🔍 Detalle de Carga Actual", "�
 m_gp = cargar_maestro(PATH_GP)
 m_costos = cargar_maestro(PATH_COSTOS)
 
-# --- PESTAÑA 1 (SIN CAMBIOS) ---
+# --- PESTAÑA 1 (SIN CAMBIOS SEGÚN TU PEDIDO) ---
 with tabs[0]:
     if m_gp is None or m_costos is None: st.warning("⚠️ Cargue los maestros.")
     else:
@@ -119,38 +120,29 @@ with tabs[0]:
                     pd.concat([pd.read_csv(HISTORICO_FILE) if os.path.exists(HISTORICO_FILE) else pd.DataFrame(), res], ignore_index=True).to_csv(HISTORICO_FILE, index=False)
                     st.success("Guardado.")
 
-# --- PESTAÑA 2: CARGA ACTUAL (MEJORADA) ---
+# --- PESTAÑA 2: CARGA ACTUAL (KPIs POTENCIADOS) ---
 with tabs[1]:
     if 'res_actual' in st.session_state:
         df_det = st.session_state['res_actual'].copy()
         
-        # 1. KPIs SUPERIORES
         st.subheader(f"📑 Auditoría Detallada - {st.session_state['mes_actual']}")
+        
+        # NUEVAS MÉTRICAS SOLICITADAS
         k1, k2, k3, k4 = st.columns(4)
-        k1.metric("Cant. Registros", f"{len(df_det)}")
-        k2.metric("Bultos Totales", f"{df_det['BULTOS'].sum():,.0f}")
-        k3.metric("Subtotal Neto", f"$ {df_det['VALOR_LOGISTICA'].sum():,.2f}")
-        k4.metric("Total c/ IVA", f"$ {df_det['TOTAL CON IVA'].sum():,.2f}")
+        k1.metric("Bultos Totales", f"{df_det['BULTOS'].sum():,.0f}")
+        k2.metric("Total Preparación", f"$ {df_det['TOTAL PREPARACION'].sum():,.2f}")
+        k3.metric("Total Transporte", f"$ {df_det['TOTAL TRANSPORTE'].sum():,.2f}")
+        k4.metric("Total Final (IVA)", f"$ {df_det['TOTAL CON IVA'].sum():,.2f}")
         
         st.markdown("---")
         
-        # 2. FILTRO DE BÚSQUEDA PRO
-        col_bus, col_vacio = st.columns([2, 1])
-        with col_bus:
-            bus_det = st.text_input("🔍 Buscador Inteligente (Nombre, Zona o Código):", "").upper()
-        
+        # FILTRO DE BÚSQUEDA
+        bus_det = st.text_input("🔍 Buscar en el detalle:", "").upper()
         df_view = df_det[df_det.astype(str).apply(lambda x: x.str.contains(bus_det)).any(axis=1)] if bus_det else df_det
 
-        # 3. TABLA DE DETALLE AUDITABLE
-        # Reordenamos columnas para que sea fácil de leer
-        cols_orden = [
-            'CODIGO', 'DESCRIPCIÓN ZONA', 'GP', 'TIPO', 'BULTOS', 
-            'PREPARACION', 'TRANSPORTE', 
-            'TOTAL PREPARACION', 'TOTAL TRANSPORTE', 
-            'VALOR_LOGISTICA', 'IVA 15%', 'TOTAL CON IVA'
-        ]
+        # TABLA DE DETALLE
+        cols_orden = ['CODIGO', 'DESCRIPCIÓN ZONA', 'GP', 'TIPO', 'BULTOS', 'PREPARACION', 'TRANSPORTE', 'TOTAL PREPARACION', 'TOTAL TRANSPORTE', 'VALOR_LOGISTICA', 'IVA 15%', 'TOTAL CON IVA']
         
-        # Fila de totales solo para las columnas numéricas
         tot_row = {
             'CODIGO': '--- TOTALES ---',
             'BULTOS': df_view['BULTOS'].sum(),
@@ -162,7 +154,6 @@ with tabs[1]:
         }
         
         df_det_final = pd.concat([df_view[cols_orden], pd.DataFrame([tot_row])], ignore_index=True)
-        
         cols_money = ['PREPARACION', 'TRANSPORTE', 'TOTAL PREPARACION', 'TOTAL TRANSPORTE', 'VALOR_LOGISTICA', 'IVA 15%', 'TOTAL CON IVA']
         
         st.table(
@@ -171,21 +162,20 @@ with tabs[1]:
             .set_properties(**{'background-color': '#2C3E50', 'color': 'white', 'font-weight': 'bold'}, subset=pd.IndexSlice[df_det_final.index[-1], :])
         )
     else:
-        st.info("⚠️ No hay datos procesados. Por favor, sube un archivo en la pestaña 'Liquidación Mensual'.")
+        st.info("⚠️ Procese un archivo en la pestaña 'Liquidación Mensual'.")
 
-# --- PESTAÑAS RESTANTES IGUALES ---
 with tabs[2]:
     st.header("⚙️ Configuración")
     c1, c2 = st.columns(2)
     with c1:
-        u_gp = st.file_uploader("Maestro GP", type=['xlsx', 'xls', 'csv'], key="ugp")
+        u_gp = st.file_uploader("Actualizar Maestro GP", type=['xlsx', 'xls', 'csv'], key="ugp")
         if u_gp:
             df_u_gp = leer_archivo_protegido(u_gp)
             if df_u_gp is not None:
                 df_u_gp.columns = df_u_gp.columns.str.strip().str.upper()
                 guardar_maestro(df_u_gp, PATH_GP); st.success("✅ Maestro GP guardado.")
     with c2:
-        u_costos = st.file_uploader("Maestro Costos", type=['xlsx', 'xls', 'csv'], key="ucostos")
+        u_costos = st.file_uploader("Actualizar Maestro Costos", type=['xlsx', 'xls', 'csv'], key="ucostos")
         if u_costos:
             df_u_costos = leer_archivo_protegido(u_costos)
             if df_u_costos is not None:
@@ -193,7 +183,7 @@ with tabs[2]:
                 guardar_maestro(df_u_costos, PATH_COSTOS); st.success("✅ Maestro de Costos guardado.")
 
 with tabs[3]:
-    st.header("🗄️ Histórico")
+    st.header("🗄️ Historial")
     if os.path.exists(HISTORICO_FILE):
         h_df = pd.read_csv(HISTORICO_FILE)
         st.dataframe(h_df, use_container_width=True)
