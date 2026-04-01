@@ -189,4 +189,17 @@ with tabs[2]:
         uc = st.file_uploader("Actualizar Maestro Costos", type=['xlsx', 'xls', 'csv'], key="uc")
         if uc:
             d = leer_archivo(uc)
-            if d is not None
+            if d is not None:
+                d.columns = d.columns.str.strip().str.upper()
+                guardar_maestro(d, PATH_COSTOS); st.success("Costos Guardado.")
+
+# --- PESTAÑA 4: HISTORIAL ---
+with tabs[3]:
+    if os.path.exists(HISTORICO_FILE):
+        h = pd.read_csv(HISTORICO_FILE)
+        with st.expander("🗑️ Borrar Mes Específico"):
+            m = st.selectbox("Mes a borrar:", sorted(h['MES_REPORTE'].unique()))
+            if st.button("Eliminar permanentemente"):
+                h[h['MES_REPORTE'] != m].to_csv(HISTORICO_FILE, index=False)
+                st.rerun()
+        st.dataframe(h, use_container_width=True)
