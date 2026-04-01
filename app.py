@@ -136,7 +136,7 @@ with tabs[0]:
                     for col in ['BULTOS', 'PREPARACION', 'TRANSPORTE']:
                         res[col] = pd.to_numeric(res[col], errors='coerce').fillna(0)
                     
-                    # CÁLCULOS ADICIONALES PARA EL DETALLE
+                    # CÁLCULOS ADICIONALES
                     res['TOTAL PREPARACION'] = res['PREPARACION'] * res['BULTOS']
                     res['TOTAL TRANSPORTE'] = res['TRANSPORTE'] * res['BULTOS']
                     res['VALOR_LOGISTICA'] = res['TOTAL PREPARACION'] + res['TOTAL TRANSPORTE']
@@ -152,18 +152,15 @@ with tabs[0]:
                     summary['IVA 15%'] = summary['SUBTOTAL'] * 0.15
                     summary['TOTAL'] = summary['SUBTOTAL'] + summary['IVA 15%']
 
-                    # BUSCADOR DINÁMICO
                     busqueda = st.text_input("🔍 Buscar por nombre de Gerente (GP):", "")
                     summary_view = summary[summary['GP'].str.contains(busqueda.upper())] if busqueda else summary
 
-                    # Fila de Totales para el resumen
                     tot = {'GP': '--- TOTAL GENERAL ---'}
                     for col in summary_view.columns[1:]: tot[col] = summary_view[col].sum()
                     summary_final = pd.concat([summary_view, pd.DataFrame([tot])], ignore_index=True)
 
                     st.dataframe(summary_final.style.format(precision=2), use_container_width=True)
                     
-                    # Guardar el procesamiento en el estado de la sesión
                     st.session_state['res_actual'] = res
                     st.session_state['mes_actual'] = mes_sel
                     
@@ -173,17 +170,17 @@ with tabs[0]:
                         pd.concat([pd.read_csv(HISTORICO_FILE) if os.path.exists(HISTORICO_FILE) else pd.DataFrame(), res], ignore_index=True).to_csv(HISTORICO_FILE, index=False)
                         st.success("Guardado en Histórico.")
 
-# --- PESTAÑA 2: DETALLE DE CARGA ACTUAL ---
+# --- PESTAÑA 2: DETALLE DE CARGA ACTUAL (CORREGIDA) ---
 with tabs[1]:
     st.header("🔍 Detalle de la Carga Procesada")
     if 'res_actual' in st.session_state:
-        df_detalle = st.session_state['res_actual']
+        df_detalle = st.session_state['res_actual'].copy()
         st.write(f"Mostrando el detalle para el mes de **{st.session_state['mes_actual']}**")
         
         bus_det = st.text_input("🔍 Filtrar detalle:", "", key="bus_det")
         df_det_view = df_detalle[df_detalle.astype(str).apply(lambda x: x.str.contains(bus_det.upper())).any(axis=1)] if bus_det else df_detalle
 
-        # Fila de totales para el detalle (Añadiendo las nuevas columnas multiplicadas)
+        # Preparamos la fila de totales
         tot_det = {
             'CODIGO': 'TOTALES', 
             'BULTOS': df_det_view['BULTOS'].sum(),
@@ -191,11 +188,19 @@ with tabs[1]:
             'TOTAL TRANSPORTE': df_det_view['TOTAL TRANSPORTE'].sum(),
             'VALOR_LOGISTICA': df_det_view['VALOR_LOGISTICA'].sum()
         }
-        df_det_final = pd.concat([df_det_view, pd.DataFrame([tot_det])], ignore_index=True).fillna("")
         
-        # Formatear columnas de dinero
+        # Unimos la tabla con la fila de totales
+        df_det_final = pd.concat([df_det_view, pd.DataFrame([tot_det])], ignore_index=True)
+        
+        # --- SOLUCIÓN AL ERROR DE FORMATO ---
+        # En lugar de usar .style.format, formateamos los números directamente en el DataFrame
+        # solo en las columnas que existen y solo donde los valores son numéricos.
         cols_dinero = ['PREPARACION', 'TRANSPORTE', 'TOTAL PREPARACION', 'TOTAL TRANSPORTE', 'VALOR_LOGISTICA']
-        st.dataframe(df_det_final.style.format({c: "{:.2f}" for c in cols_dinero if c in df_det_final.columns}), use_container_width=True)
+        for c in cols_dinero:
+            if c in df_det_final.columns:
+                df_det_final[c] = pd.to_numeric(df_det_final[c], errors='coerce').map('{:.2f}'.format).replace('nan', '')
+
+        st.dataframe(df_det_final.fillna(""), use_container_width=True)
     else:
         st.info("Primero sube y procesa un archivo en la pestaña 'Liquidación Mensual'.")
 
@@ -205,5 +210,6 @@ with tabs[3]:
     if os.path.exists(HISTORICO_FILE):
         h_df = pd.read_csv(HISTORICO_FILE)
         st.dataframe(h_df, use_container_width=True)
-        st.download_button("📥 Descargar Todo el Histórico", h_df.to_csv(index=False).encode('utf-8'), "historico_completo.csv", "text/csv")
+        csv_bin = h_df.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Descargar Todo el Histórico", csv_bin, "historico_completo.csv", "text/csv")
     else: st.info("Sin datos históricos.")
