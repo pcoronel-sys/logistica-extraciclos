@@ -22,7 +22,7 @@ st.markdown(f"""
         background: rgba(250, 255, 255, 0.7) !important; 
         backdrop-filter: blur(15px) !important; 
         color: #333 !important; 
-        border: 1px solid rgba(255, 255, 255, 0.3) !important; 
+        border: 1px solid rgba(200, 200, 200, 0.3) !important; 
         border-radius: 35px !important; 
         height: 250px !important; 
         width: 100% !important; 
