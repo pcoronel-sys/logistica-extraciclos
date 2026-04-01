@@ -7,43 +7,28 @@ from datetime import datetime
 # 1. CONFIGURACIÓN DE PÁGINA
 st.set_page_config(page_title="Gestión Logística Bagó", layout="wide", page_icon="🧪")
 
-# --- ESTILO CORPORATIVO UNIFORME ---
+# --- ESTILO CORPORATIVO ---
 st.markdown("""
     <style>
     .stApp { background-color: #ffffff; }
-    
-    /* Configuración Global de Encabezados de Tablas */
-    thead tr th {
-        background-color: #2C3E50 !important;
-        color: white !important;
-        font-weight: bold !important;
-        text-align: center !important;
-        border: 1px solid #34495E !important;
-    }
-    
-    /* Estilo de Tarjetas de Métricas */
-    div[data-testid="stMetric"] {
-        background: #ffffff;
-        border-radius: 12px;
-        border: 1px solid #f0f0f0;
-        border-top: 5px solid #2C3E50;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.02);
-        padding: 20px !important;
-    }
-
-    /* Estilo de Botones */
     .stButton>button {
         background: linear-gradient(90deg, #2C3E50 0%, #4CA1AF 100%);
         color: white; border-radius: 10px; border: none;
         font-weight: bold; height: 3em; width: 100%;
-        transition: 0.3s ease;
-    }
-    .stButton>button:hover {
-        opacity: 0.9;
-        transform: translateY(-2px);
     }
     </style>
     """, unsafe_allow_html=True)
+
+# Configuración de Estilo de Encabezado (Para reusar en ambas tablas)
+estilo_encabezado = [
+    dict(selector="th", props=[("font-size", "110%"),
+                               ("text-align", "center"),
+                               ("text-transform", "uppercase"),
+                               ("font-weight", "bold"),
+                               ("color", "white"),
+                               ("background-color", "#2C3E50"), # GRIS AZULADO PROFUNDO
+                               ("border", "1px solid #34495E")])
+]
 
 PATH_GP = "master_gp.csv"
 PATH_COSTOS = "master_costos.csv"
@@ -69,7 +54,7 @@ def leer_archivo_protegido(archivo):
 st.title("📊 Control de Liquidación Logística")
 tabs = st.tabs(["🚀 Liquidación Mensual", "🔍 Detalle de Carga Actual", "⚙️ Configurar Maestros", "🗄️ Historial"])
 
-# --- PESTAÑA 3: CONFIGURAR MAESTROS ---
+# --- PESTAÑA 3: CONFIGURACIÓN ---
 with tabs[2]:
     st.header("⚙️ Configuración de Bases Maestras")
     c1, c2 = st.columns(2)
@@ -110,7 +95,7 @@ with tabs[0]:
                 m_costos['DESCRIPCIÓN ZONA'] = m_costos['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
 
                 if not df_c[~df_c['CODIGO'].isin(m_gp[col_id_gp])]['CODIGO'].empty or not df_c[~df_c['DESCRIPCIÓN ZONA'].isin(m_costos['DESCRIPCIÓN ZONA'])]['DESCRIPCIÓN ZONA'].empty:
-                    st.error("🛑 Existen errores de validación. Revise los Maestros.")
+                    st.error("🛑 Existen errores de validación en la carga.")
                 else:
                     res = pd.merge(df_c, m_gp.drop_duplicates(subset=[col_id_gp])[[col_id_gp, 'GP', 'TIPO']], left_on='CODIGO', right_on=col_id_gp, how='left')
                     m_c_c = m_costos.rename(columns={'PRECIO_PREP': 'PREPARACION', 'PRECIO_TRANS': 'TRANSPORTE'}).drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
@@ -137,8 +122,10 @@ with tabs[0]:
                     for col in summary_view.columns[1:]: tot[col] = summary_view[col].sum()
                     summary_final = pd.concat([summary_view, pd.DataFrame([tot])], ignore_index=True)
 
+                    # TABLA CON ENCABEZADO FORZADO
                     st.dataframe(
                         summary_final.style.format(precision=2)
+                        .set_table_styles(estilo_encabezado) # APLICAR COLOR A LA FILA DE TÍTULOS
                         .set_properties(**{'background-color': '#E8F6F3', 'color': '#16A085', 'font-weight': 'bold'}, subset=['TOTAL'])
                         .set_properties(**{'background-color': '#2C3E50', 'color': 'white', 'font-weight': 'bold'}, subset=pd.IndexSlice[summary_final.index[-1], :])
                         , use_container_width=True
@@ -148,7 +135,7 @@ with tabs[0]:
                         res['MES_REPORTE'] = mes_sel
                         res['FECHA_REGISTRO'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         pd.concat([pd.read_csv(HISTORICO_FILE) if os.path.exists(HISTORICO_FILE) else pd.DataFrame(), res], ignore_index=True).to_csv(HISTORICO_FILE, index=False)
-                        st.success("Guardado en Base Histórica.")
+                        st.success("Guardado.")
 
 # --- PESTAÑA 2: DETALLE ---
 with tabs[1]:
@@ -159,18 +146,18 @@ with tabs[1]:
         df_det_final = pd.concat([df_det_view, pd.DataFrame([tot_det])], ignore_index=True)
         cols_m = ['PREPARACION', 'TRANSPORTE', 'TOTAL PREPARACION', 'TOTAL TRANSPORTE', 'VALOR_LOGISTICA', 'IVA 15%', 'TOTAL CON IVA']
         
-        # El estilo de los encabezados se aplica vía CSS al inicio
         st.dataframe(
             df_det_final.style.format({c: "{:.2f}" for c in cols_m if c in df_det_final.columns}, na_rep="")
+            .set_table_styles(estilo_encabezado) # APLICAR COLOR A LA FILA DE TÍTULOS
             .set_properties(**{'background-color': '#E8F6F3', 'font-weight': 'bold'}, subset=['TOTAL CON IVA'])
             .set_properties(**{'background-color': '#2C3E50', 'color': 'white', 'font-weight': 'bold'}, subset=pd.IndexSlice[df_det_final.index[-1], :])
             , use_container_width=True
         )
-    else: st.info("Procese un archivo en la pestaña anterior para ver el detalle.")
+    else: st.info("Procese un archivo primero.")
 
 # --- PESTAÑA 4: HISTORIAL ---
 with tabs[3]:
-    st.header("🗄️ Histórico")
+    st.header("🗄️ Historial")
     if os.path.exists(HISTORICO_FILE):
         h_df = pd.read_csv(HISTORICO_FILE)
         st.dataframe(h_df, use_container_width=True)
