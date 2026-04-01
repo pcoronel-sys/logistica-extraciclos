@@ -29,6 +29,11 @@ st.markdown("""
         transform: scale(1.02);
         box-shadow: 0 5px 15px rgba(225, 0, 120, 0.4);
     }
+    /* Estilo para que las tablas ocupen buen espacio */
+    .stDataFrame {
+        border: 1px solid #f0f0f0;
+        border-radius: 10px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -95,7 +100,7 @@ m_costos = cargar_maestro(PATH_COSTOS)
 # --- PESTAÑA 1: LIQUIDACIÓN ---
 with tabs[0]:
     if m_gp is None or m_costos is None:
-        st.warning("⚠️ Configura los Maestros primero en la pestaña correspondiente.")
+        st.warning("⚠️ Configura los Maestros primero.")
     else:
         col_m, col_f = st.columns([1, 2])
         with col_m:
@@ -161,7 +166,14 @@ with tabs[0]:
                     for col in summary_view.columns[1:]: tot[col] = summary_view[col].sum()
                     summary_final = pd.concat([summary_view, pd.DataFrame([tot])], ignore_index=True)
 
-                    st.dataframe(summary_final.style.format(precision=2), use_container_width=True)
+                    # --- ESTILO BONITO PARA LA TABLA ---
+                    st.dataframe(
+                        summary_final.style.format(precision=2)
+                        .background_gradient(cmap="PuRd", subset=["TOTAL"]) # Degradado Magenta en el Total
+                        .set_properties(**{'font-weight': 'bold'}, subset=pd.IndexSlice[summary_final.index[-1], :]) # Negrita a la última fila
+                        .set_properties(subset=['IVA 15%'], **{'color': '#E10078'}) # Color magenta al IVA
+                        , use_container_width=True
+                    )
                     
                     st.session_state['res_actual'] = res
                     st.session_state['mes_actual'] = mes_sel
@@ -182,7 +194,6 @@ with tabs[1]:
         bus_det = st.text_input("🔍 Filtrar detalle:", "", key="bus_det")
         df_det_view = df_detalle[df_detalle.astype(str).apply(lambda x: x.str.contains(bus_det.upper())).any(axis=1)] if bus_det else df_detalle
 
-        # Fila de totales para el detalle (Añadidas las nuevas columnas solicitadas)
         tot_det = {
             'CODIGO': 'TOTALES', 
             'BULTOS': df_det_view['BULTOS'].sum(),
@@ -195,22 +206,24 @@ with tabs[1]:
         
         df_det_final = pd.concat([df_det_view, pd.DataFrame([tot_det])], ignore_index=True)
         
-        # Formatear columnas numéricas para visualización
-        cols_dinero = ['PREPARACION', 'TRANSPORTE', 'TOTAL PREPARACION', 'TOTAL TRANSPORTE', 'VALOR_LOGISTICA', 'IVA 15%', 'TOTAL CON IVA']
-        for c in cols_dinero:
-            if c in df_det_final.columns:
-                df_det_final[c] = pd.to_numeric(df_det_final[c], errors='coerce').map('{:.2f}'.format).replace('nan', '')
+        # Estilo para el detalle
+        cols_num = ['PREPARACION', 'TRANSPORTE', 'TOTAL PREPARACION', 'TOTAL TRANSPORTE', 'VALOR_LOGISTICA', 'IVA 15%', 'TOTAL CON IVA']
+        
+        # Formateo numérico y visual
+        df_styled = df_det_final.style.format({c: "{:.2f}" for c in cols_num if c in df_det_final.columns}, na_rep="")
+        df_styled = df_styled.set_properties(**{'background-color': '#fdf2f8'}, subset=['TOTAL CON IVA']) # Fondo rosado claro al total final
+        df_styled = df_styled.set_properties(**{'font-weight': 'bold'}, subset=pd.IndexSlice[df_det_final.index[-1], :]) # Negrita a la última fila
 
-        st.dataframe(df_det_final.fillna(""), use_container_width=True)
+        st.dataframe(df_styled, use_container_width=True)
     else:
-        st.info("Primero sube y procesa un archivo en la pestaña 'Liquidación Mensual'.")
+        st.info("Primero procesa un archivo.")
 
 # --- PESTAÑA 4: HISTORIAL ---
 with tabs[3]:
-    st.header("🗄️ Histórico de Movimientos")
+    st.header("🗄️ Histórico")
     if os.path.exists(HISTORICO_FILE):
         h_df = pd.read_csv(HISTORICO_FILE)
         st.dataframe(h_df, use_container_width=True)
         csv_bin = h_df.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Descargar Todo el Histórico", csv_bin, "historico_completo.csv", "text/csv")
-    else: st.info("Sin datos históricos.")
+        st.download_button("📥 Descargar", csv_bin, "historico.csv", "text/csv")
+    else: st.info("Sin datos.")
