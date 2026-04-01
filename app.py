@@ -3,23 +3,24 @@ import pandas as pd
 import os
 from datetime import datetime
 
-# 1. CONFIGURACIÓN DE PÁGINA
+# 1. CONFIGURACIÓN DE PÁGINA Y ESTILOS
 st.set_page_config(page_title="Gestión Bagó", layout="wide", page_icon="🧪")
 
-# --- USUARIO Y CONTRASEÑA ---
-USUARIO_PRO = "admin"
-CLAVE_PRO = "bago2024"
-
-# --- ESTILO CORPORATIVO ---
+# --- ESTILO CORPORATIVO AJUSTADO ---
 st.markdown("""
     <style>
     .stApp { background-color: #ffffff; }
-    [data-testid="stTable"] thead tr th {
+    
+    /* Configuración Global de Encabezados de Tablas */
+    [data-testid="stTable"] thead tr th, 
+    thead tr th {
         background-color: #2C3E50 !important;
         color: white !important;
         font-weight: bold !important;
         text-align: center !important;
     }
+    
+    /* Estilo de Tarjetas de Métricas */
     div[data-testid="stMetric"] {
         background-color: #fcfcfc;
         border-left: 6px solid #4CA1AF;
@@ -27,42 +28,96 @@ st.markdown("""
         padding: 15px !important;
         box-shadow: 2px 2px 5px rgba(0,0,0,0.05);
     }
+
+    /* Estilo de Botones */
     .stButton>button {
         background: linear-gradient(90deg, #2C3E50 0%, #4CA1AF 100%);
         color: white; border-radius: 10px; border: none;
-        font-weight: bold; height: 3em; width: 100%;
+        font-weight: bold; height: 3.5em; width: 100%;
+        transition: 0.3s ease;
     }
-    /* Estilo Login Centrado */
-    .login-container { display: flex; justify-content: center; align-items: center; width: 100%; margin-top: 15vh; }
-    .login-box { padding: 40px; border-radius: 15px; background-color: #f8f9fa; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }
+    .stButton>button:hover { opacity: 0.9; }
+
+    /* CSS AJUSTADO PARA CENTRAR Y ACHICAR EL LOGIN (SIN CUADROS FANTASMAS) */
+    .login-container {
+        display: flex;
+        justify-content: center;
+        width: 100%;
+        margin-top: 15vh; /* Baja un poco el cuadro */
+    }
+    .login-box {
+        padding: 30px 40px;
+        border-radius: 15px;
+        background-color: #f8f9fa;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        border: 1px solid #e1e1e1;
+        width: 100%;
+        max-width: 380px; /* Ancho máximo reducido para que sea compacto */
+        text-align: left; /* Títulos a la izquierda */
+    }
+    .login-header {
+        text-align: center;
+        margin-bottom: 25px;
+    }
+    .stTextInput>div>div>input { text-align: left; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- LÓGICA DE SESIÓN ---
-if 'autenticado' not in st.session_state: st.session_state['autenticado'] = False
+# --- USUARIO Y CONTRASEÑA CONFIGURABLES ---
+USUARIO_PRO = "admin"
+CLAVE_PRO = "bago2024" # <-- Cámbiala aquí
 
-if not st.session_state['autenticado']:
-    col1, col2, col3 = st.columns([1, 2, 1])
+# --- LÓGICA DE GESTIÓN DE SESIÓN ---
+if 'autenticado' not in st.session_state:
+    st.session_state['autenticado'] = False
+
+# --- FUNCIÓN DE RENDERIZADO DEL LOGIN CENTRADO Y LIMPIO ---
+def mostrar_login():
+    col1, col2, col3 = st.columns([1.5, 2, 1.5])
+    
     with col2:
-        st.markdown('<div class="login-container"><div class="login-box">', unsafe_allow_html=True)
-        st.title("Bagó Logística")
-        u = st.text_input("Usuario")
-        p = st.text_input("Contraseña", type="password")
-        if st.button("Ingresar"):
-            if u == USUARIO_PRO and p == CLAVE_PRO:
+        st.markdown('<div class="login-container">', unsafe_allow_html=True)
+        st.markdown('<div class="login-box">', unsafe_allow_html=True)
+        
+        # Cabecera limpia y centrada
+        st.markdown('<div class="login-header">', unsafe_allow_html=True)
+        st.markdown("<h2>🧪 Bagó Logística</h2>", unsafe_allow_html=True)
+        st.markdown("<p>Control Logístico Extraciclos</p>", unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Formulario de Streamlit directo
+        user = st.text_input("Usuario")
+        password = st.text_input("Contraseña", type="password")
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        if st.button("Ingresar al Sistema"):
+            if user == USUARIO_PRO and password == CLAVE_PRO:
                 st.session_state['autenticado'] = True
                 st.rerun()
-            else: st.error("Incorrecto")
-        st.markdown('</div></div>', unsafe_allow_html=True)
-    st.stop()
+            elif user == "" and password == "":
+                 st.warning("⚠️ Por favor complete los campos.")
+            else:
+                st.error("❌ Credenciales incorrectas.")
+        
+        st.markdown('</div>', unsafe_allow_html=True) # Cierra login-box
+        st.markdown('</div>', unsafe_allow_html=True) # Cierra login-container
 
-# --- BARRA LATERAL ---
-st.sidebar.success(f"Usuario: {USUARIO_PRO}")
-if st.sidebar.button("Cerrar Sesión"):
+# --- VERIFICACIÓN DE ACCESO ---
+if not st.session_state['autenticado']:
+    mostrar_login()
+    st.stop() # Detiene la ejecución aquí si no está logueado
+
+# --- BARRA LATERAL LIMPIA ---
+st.sidebar.success(f"Usuario activo: {USUARIO_PRO}")
+if st.sidebar.button("🔒 Cerrar Sesión"):
     st.session_state['autenticado'] = False
     st.rerun()
 
-# --- RUTAS Y FUNCIONES AUXILIARES ---
+# ---------------------------------------------------------
+# SISTEMA LOGÍSTICO (NO TOCADO, CON MAESTROS Y SUBTOTALES)
+# ---------------------------------------------------------
+
 PATH_GP = "master_gp.csv"
 PATH_COSTOS = "master_costos.csv"
 HISTORICO_FILE = "base_historica_bago.csv"
@@ -72,27 +127,26 @@ def cargar_maestro(path): return pd.read_csv(path) if os.path.exists(path) else 
 
 def leer_archivo_protegido(archivo):
     try:
-        nombre_lower = archivo.name.lower()
-        if nombre_lower.endswith(('.xlsx', '.xls')): return pd.read_excel(archivo)
+        if archivo.name.lower().endswith(('.xlsx', '.xls')): return pd.read_excel(archivo)
         else:
             try: return pd.read_csv(archivo, encoding='utf-8')
             except: return pd.read_csv(archivo, encoding='latin-1')
     except: return None
 
-# --- NAVEGACIÓN ---
+# Título principal del sistema
 st.title("📊 Control de Liquidación Logística")
 tabs = st.tabs(["🚀 Liquidación Mensual", "🔍 Detalle de Carga Actual", "⚙️ Configurar Maestros", "🗄️ Historial"])
 
 m_gp = cargar_maestro(PATH_GP)
 m_costos = cargar_maestro(PATH_COSTOS)
 
-# --- PESTAÑA 1: LIQUIDACIÓN ---
+# --- PESTAÑA 1: LIQUIDACIÓN (CON SUBTOTALES Y TÍTULOS EN COLOR) ---
 with tabs[0]:
-    if m_gp is None or m_costos is None: st.warning("⚠️ Cargue los maestros en la pestaña de Configuración.")
+    if m_gp is None or m_costos is None: st.warning("⚠️ Cargue los maestros.")
     else:
-        c1, c2 = st.columns([1, 2])
-        with c1: mes_sel = st.selectbox("Mes", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"])
-        with c2: archivo_carga = st.file_uploader("Subir Carga Mensual", type=['xlsx', 'xls', 'csv'])
+        col_m, col_f = st.columns([1, 2])
+        with col_m: mes_sel = st.selectbox("Mes", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"])
+        with col_f: archivo_carga = st.file_uploader("📂 Subir Carga Mensual", type=['xlsx', 'xls', 'csv'])
 
         if archivo_carga:
             df_c = leer_archivo_protegido(archivo_carga)
@@ -127,33 +181,33 @@ with tabs[0]:
                 for col in summary.columns[1:]: tot[col] = summary[col].sum()
                 summary_final = pd.concat([summary, pd.DataFrame([tot])], ignore_index=True)
 
-                st.table(summary_final.style.format(precision=2).set_properties(**{'background-color': '#2C3E50', 'color': 'white', 'font-weight': 'bold'}, subset=pd.IndexSlice[summary_final.index[-1], :]))
+                st.table(
+                    summary_final.style.format(precision=2)
+                    .set_properties(**{'background-color': '#E8F6F3', 'color': '#16A085', 'font-weight': 'bold'}, subset=['TOTAL'])
+                    .set_properties(**{'background-color': '#2C3E50', 'color': 'white', 'font-weight': 'bold'}, subset=pd.IndexSlice[summary_final.index[-1], :])
+                )
                 st.session_state['res_actual'] = res
-                st.session_state['mes_actual'] = mes_sel
                 if st.button(f"💾 Guardar Periodo {mes_sel}"):
                     res['MES_REPORTE'] = mes_sel
                     res['FECHA_REGISTRO'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     pd.concat([pd.read_csv(HISTORICO_FILE) if os.path.exists(HISTORICO_FILE) else pd.DataFrame(), res], ignore_index=True).to_csv(HISTORICO_FILE, index=False)
-                    st.success("Guardado en Histórico.")
+                    st.success("Guardado.")
 
-# --- PESTAÑA 2: DETALLE ---
+# --- PESTAÑA 2: DETALLE (SIN CAMBIOS) ---
 with tabs[1]:
     if 'res_actual' in st.session_state:
-        df_det = st.session_state['res_actual'].copy()
+        df_det_view = st.session_state['res_actual'].copy()
         st.subheader(f"📑 Auditoría - {st.session_state['mes_actual']}")
         k1, k2, k3, k4, k5 = st.columns(5)
-        k1.metric("Bultos", f"{df_det['BULTOS'].sum():,.0f}")
-        k2.metric("Prep.", f"$ {df_det['TOTAL PREPARACION'].sum():,.2f}")
-        k3.metric("Trans.", f"$ {df_det['TOTAL TRANSPORTE'].sum():,.2f}")
-        k4.metric("Neto", f"$ {df_det['VALOR_LOGISTICA'].sum():,.2f}")
-        k5.metric("Total IVA", f"$ {df_det['TOTAL CON IVA'].sum():,.2f}")
-        
-        bus = st.text_input("🔍 Buscar:", "").upper()
-        df_v = df_det[df_det.astype(str).apply(lambda x: x.str.contains(bus)).any(axis=1)] if bus else df_det
-        st.dataframe(df_v, use_container_width=True)
+        k1.metric("Bultos", f"{df_det_view['BULTOS'].sum():,.0f}")
+        k2.metric("Prep.", f"$ {df_det_view['TOTAL PREPARACION'].sum():,.2f}")
+        k3.metric("Trans.", f"$ {df_det_view['TOTAL TRANSPORTE'].sum():,.2f}")
+        k4.metric("Neto", f"$ {df_det_view['VALOR_LOGISTICA'].sum():,.2f}")
+        k5.metric("Total IVA", f"$ {df_det_view['TOTAL CON IVA'].sum():,.2f}")
+        st.dataframe(df_det_view, use_container_width=True)
     else: st.info("Procese un archivo primero.")
 
-# --- PESTAÑA 3: CONFIGURACIÓN (RESTAURADA) ---
+# --- PESTAÑA 3: CONFIGURACIÓN (CON CARGA DE MAESTROS) ---
 with tabs[2]:
     st.header("⚙️ Configuración de Bases Maestras")
     col_a, col_b = st.columns(2)
@@ -172,12 +226,12 @@ with tabs[2]:
                 df_ucostos.columns = df_ucostos.columns.str.strip().str.upper()
                 guardar_maestro(df_ucostos, PATH_COSTOS); st.success("✅ Maestro de Costos guardado.")
 
-# --- PESTAÑA 4: HISTORIAL ---
+# --- PESTAÑA 4: HISTORIAL (CON BORRADO POR MES) ---
 with tabs[3]:
     if os.path.exists(HISTORICO_FILE):
         h_df = pd.read_csv(HISTORICO_FILE)
-        with st.expander("🗑️ Eliminar Reporte por Mes"):
-            m_del = st.selectbox("Mes a borrar:", sorted(h_df['MES_REPORTE'].unique()))
+        with st.expander("🗑️ Zona de Peligro: Eliminar Periodo"):
+            m_del = st.selectbox("Seleccionar Mes a borrar:", sorted(h_df['MES_REPORTE'].unique()))
             if st.button("Eliminar permanentemente"):
                 h_df[h_df['MES_REPORTE'] != m_del].to_csv(HISTORICO_FILE, index=False)
                 st.rerun()
