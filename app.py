@@ -113,48 +113,57 @@ elif st.session_state['pagina_actual'] == "sistema":
             if archivo:
                 df_c_raw = leer_archivo(archivo)
                 if df_c_raw is not None:
-                    # --- 1. CONSOLIDACIÓN ANTI-DUPLICADOS DE LA CARGA ---
+                    # --- 1. NORMALIZACIÓN Y CONSOLIDACIÓN DE CARGA ---
                     df_c_raw.columns = df_c_raw.columns.str.strip().str.upper()
                     df_c_raw['CODIGO'] = df_c_raw['CODIGO'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                     df_c_raw['DESCRIPCIÓN ZONA'] = df_c_raw['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
                     df_c_raw['BULTOS'] = pd.to_numeric(df_c_raw['BULTOS'], errors='coerce').fillna(0)
                     
-                    # Agrupamos la carga ANTES del merge para que no haya filas repetidas
+                    # Consolidamos la carga para evitar duplicados en el origen
                     df_c = df_c_raw.groupby(['CODIGO', 'DESCRIPCIÓN ZONA'], as_index=False)['BULTOS'].sum()
                     
-                    # --- 2. LIMPIEZA MAESTROS (ANTIDUPLICADOS) ---
+                    # --- 2. LIMPIEZA EXTREMA DE MAESTROS ---
+                    # GP
                     col_id_gp = [c for c in m_gp.columns if 'CODIGO' in c.upper()][0]
                     m_gp_clean = m_gp.copy()
                     m_gp_clean[col_id_gp] = m_gp_clean[col_id_gp].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
-                    m_gp_clean = m_gp_clean.drop_duplicates(subset=[col_id_gp])
+                    m_gp_clean = m_gp_clean.drop_duplicates(subset=[col_id_gp]) # Solo 1 registro por código
                     
+                    # Costos
                     m_costos_clean = m_costos.copy()
                     m_costos_clean.columns = m_costos_clean.columns.str.strip().str.upper()
                     ren = {c: "P_PREP" for c in m_costos_clean.columns if "PREP" in c}
                     ren.update({c: "P_TRANS" for c in m_costos_clean.columns if "TRANS" in c})
                     ren.update({c: "DESCRIPCIÓN ZONA" for c in m_costos_clean.columns if "ZONA" in c})
-                    m_costos_clean = m_costos_clean.rename(columns=ren).drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
+                    m_costos_clean = m_costos_clean.rename(columns=ren)
                     m_costos_clean['DESCRIPCIÓN ZONA'] = m_costos_clean['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
+                    m_costos_clean = m_costos_clean.drop_duplicates(subset=['DESCRIPCIÓN ZONA']) # Solo 1 registro por zona
                     
-                    # --- 3. CRUCE FINAL ---
+                    # --- 3. CRUCE CONTROLADO (MANY-TO-ONE) ---
+                    # Primero unimos con GP
                     res = pd.merge(df_c, m_gp_clean[[col_id_gp, 'GP', 'TIPO']], left_on='CODIGO', right_on=col_id_gp, how='left')
+                    # Luego unimos con Costos
                     res = pd.merge(res, m_costos_clean[['DESCRIPCIÓN ZONA', 'P_PREP', 'P_TRANS']], on='DESCRIPCIÓN ZONA', how='left')
 
+                    # --- 4. ALERTAS TEMPRANAS ---
                     sin_gp = res[res['GP'].isna()]['CODIGO'].unique()
                     sin_tar = res[res['P_PREP'].isna()]['DESCRIPCIÓN ZONA'].unique()
 
                     if len(sin_gp) > 0 or len(sin_tar) > 0:
-                        st.error("🛑 BLOQUEO: Datos incompletos.")
+                        st.error("🛑 ERROR DE CONCILIACIÓN: Se detectaron datos faltantes.")
                         ce1, ce2 = st.columns(2)
                         with ce1:
                             if len(sin_gp) > 0:
-                                st.warning(f"❌ Códigos sin GP: {len(sin_gp)}")
-                                b1 = io.BytesIO(); pd.DataFrame({'CODIGOS_FALTANTES': sin_gp}).to_excel(b1, index=False); st.download_button("📥 Descargar códigos", b1.getvalue(), "faltantes_GP.xlsx")
+                                st.warning(f"Códigos no registrados: {len(sin_gp)}")
+                                b1 = io.BytesIO(); pd.DataFrame({'CODIGO_FALTANTE': sin_gp}).to_excel(b1, index=False)
+                                st.download_button("📥 Descargar códigos faltantes", b1.getvalue(), "faltantes_GP.xlsx")
                         with ce2:
                             if len(sin_tar) > 0:
-                                st.warning(f"❌ Zonas sin tarifa: {len(sin_tar)}")
-                                b2 = io.BytesIO(); pd.DataFrame({'ZONAS_SIN_TARIFA': sin_tar}).to_excel(b2, index=False); st.download_button("📥 Descargar zonas", b2.getvalue(), "faltantes_Tarifas.xlsx")
+                                st.warning(f"Zonas sin tarifa: {len(sin_tar)}")
+                                b2 = io.BytesIO(); pd.DataFrame({'ZONA_SIN_TARIFA': sin_tar}).to_excel(b2, index=False)
+                                st.download_button("📥 Descargar zonas faltantes", b2.getvalue(), "faltantes_Tarifas.xlsx")
                     else:
+                        # --- 5. CÁLCULOS FINALES ---
                         res['TOTAL_PREPARACION'] = res['P_PREP'] * res['BULTOS']
                         res['TOTAL_TRANSPORTE'] = res['P_TRANS'] * res['BULTOS']
                         res['SUBTOTAL_NETO'] = res['TOTAL_PREPARACION'] + res['TOTAL_TRANSPORTE']
@@ -173,7 +182,7 @@ elif st.session_state['pagina_actual'] == "sistema":
                         summary_f = pd.concat([summary.reset_index(), pd.DataFrame([{'GP': '--- TOTALES ---', **summary.sum()}])], ignore_index=True)
                         st.table(summary_f.style.format(subset=summary_f.columns[1:], formatter="{:,.2f}"))
                         
-                        out_sum = io.BytesIO(); 
+                        out_sum = io.BytesIO()
                         with pd.ExcelWriter(out_sum, engine='openpyxl') as wr: summary_f.to_excel(wr, index=False, sheet_name='Resumen')
                         st.download_button("📥 Descargar Resumen (Excel)", out_sum.getvalue(), f"Resumen_Bago_{mes_sel}.xlsx")
 
@@ -190,9 +199,9 @@ elif st.session_state['pagina_actual'] == "sistema":
             df_full = st.session_state['res_actual']
             st.markdown("### 🔍 Filtros")
             f1, f2, f3 = st.columns(3)
-            with f1: sel_gp = st.multiselect("GP", options=sorted(df_full['GP'].unique()))
-            with f2: sel_tipo = st.multiselect("Tipo", options=sorted(df_full['TIPO'].unique()))
-            with f3: sel_zona = st.multiselect("Zona", options=sorted(df_full['DESCRIPCIÓN ZONA'].unique()))
+            with f1: sel_gp = st.multiselect("Filtrar por GP", options=sorted(df_full['GP'].unique()))
+            with f2: sel_tipo = st.multiselect("Filtrar por Tipo", options=sorted(df_full['TIPO'].unique()))
+            with f3: sel_zona = st.multiselect("Filtrar por Zona", options=sorted(df_full['DESCRIPCIÓN ZONA'].unique()))
 
             df_v = df_full.copy()
             if sel_gp: df_v = df_v[df_v['GP'].isin(sel_gp)]
@@ -200,9 +209,9 @@ elif st.session_state['pagina_actual'] == "sistema":
             if sel_zona: df_v = df_v[df_v['DESCRIPCIÓN ZONA'].isin(sel_zona)]
 
             k1, k2, k3, k4 = st.columns(4)
-            k1.metric("Bultos", f"{df_v['BULTOS'].sum():,.0f}")
-            k2.metric("Prep.", f"$ {df_v['TOTAL_PREPARACION'].sum():,.2f}")
-            k3.metric("Trans.", f"$ {df_v['TOTAL_TRANSPORTE'].sum():,.2f}")
+            k1.metric("Bultos Filtrados", f"{df_v['BULTOS'].sum():,.0f}")
+            k2.metric("Preparación", f"$ {df_v['TOTAL_PREPARACION'].sum():,.2f}")
+            k3.metric("Transporte", f"$ {df_v['TOTAL_TRANSPORTE'].sum():,.2f}")
             k4.metric("Total Final", f"$ {df_v['TOTAL_FINAL'].sum():,.2f}")
             
             st.divider()
@@ -212,13 +221,13 @@ elif st.session_state['pagina_actual'] == "sistema":
             st.dataframe(df_v, use_container_width=True)
 
     with tabs[2]: 
-        st.header("⚙️ Maestros")
+        st.header("⚙️ Gestión de Maestros")
         ca, cb = st.columns(2)
         with ca:
-            ug = st.file_uploader("Cargar GP", type=['csv','xlsx'])
+            ug = st.file_uploader("Maestro GP", type=['csv','xlsx'])
             if ug: d = leer_archivo(ug); d.to_csv(PATH_GP, index=False); st.success("GP OK")
         with cb:
-            uc = st.file_uploader("Cargar Costos", type=['csv','xlsx'])
+            uc = st.file_uploader("Maestro Costos", type=['csv','xlsx'])
             if uc: d = leer_archivo(uc); d.to_csv(PATH_COSTOS, index=False); st.success("Costos OK")
 
     with tabs[3]: 
