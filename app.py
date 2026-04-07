@@ -78,27 +78,24 @@ if st.session_state['pagina_actual'] == "inicio":
     with col_l:
         st.markdown(f'<p class="almacen-tag"></p>', unsafe_allow_html=True)
         if st.button("\n\n EXTRA CICLOS"):
-            st.session_state['pagina_actual'] = "sistema" # Dirige al sistema funcional
+            st.session_state['pagina_actual'] = "sistema" 
             st.rerun()
             
     with col_r:
         st.markdown(f'<p class="almacen-tag"></p>', unsafe_allow_html=True)
         if st.button("\n REPROGRAMA"):
-            # NO CAMBIA DE PÁGINA - Se queda en el inicio
             st.toast("Módulo en desarrollo...", icon="⚠️")
             pass 
 
 # ---------------------------------------------------------
-# PANTALLA 2: SISTEMA PRINCIPAL (FUNCIONALIDAD INTACTA)
+# PANTALLA 2: SISTEMA PRINCIPAL
 # ---------------------------------------------------------
 elif st.session_state['pagina_actual'] == "sistema":
     
-    # Botón lateral para regresar
     if st.sidebar.button("⬅️ Volver al Menú Principal"):
         st.session_state['pagina_actual'] = "inicio"
         st.rerun()
 
-    # --- RUTAS ---
     PATH_GP = "master_gp.csv"
     PATH_COSTOS = "master_costos.csv"
     HISTORICO_FILE = "base_historica_bago.csv"
@@ -150,10 +147,28 @@ elif st.session_state['pagina_actual'] == "sistema":
                     m_costos_clean['DESCRIPCIÓN ZONA'] = m_costos_clean['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
                     m_costos_clean = m_costos_clean.drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
                     
-                    # Cruce y Cálculos
+                    # --- CRUCE ---
                     res = pd.merge(df_c, m_gp_clean[[col_id_gp, 'GP', 'TIPO']], left_on='CODIGO', right_on=col_id_gp, how='left')
                     res = pd.merge(res, m_costos_clean[['DESCRIPCIÓN ZONA', 'PRECIO_PREP', 'PRECIO_TRANS']], on='DESCRIPCIÓN ZONA', how='left')
+
+                    # --- DETECCIÓN DE CÓDIGOS FALTANTES ---
+                    faltan_gp = res[res['GP'].isna()]['CODIGO'].unique()
+                    faltan_costo = res[res['PRECIO_PREP'].isna() | res['PRECIO_TRANS'].isna()]['DESCRIPCIÓN ZONA'].unique()
+
+                    if len(faltan_gp) > 0 or len(faltan_costo) > 0:
+                        st.error("🚨 ATENCIÓN: Se encontraron datos no registrados en los maestros")
+                        col_e1, col_e2 = st.columns(2)
+                        with col_e1:
+                            if len(faltan_gp) > 0:
+                                st.warning(f"Códigos sin GP asignado: {len(faltan_gp)}")
+                                st.write(faltan_gp)
+                        with col_e2:
+                            if len(faltan_costo) > 0:
+                                st.warning(f"Zonas sin Tarifas de Costo: {len(faltan_costo)}")
+                                st.write(faltan_costo)
+                        st.info("💡 Los cálculos a continuación podrían estar incompletos. Actualice los maestros para corregir.")
                     
+                    # Cálculos
                     for col in ['BULTOS', 'PRECIO_PREP', 'PRECIO_TRANS']:
                         res[col] = pd.to_numeric(res[col], errors='coerce').fillna(0)
                     
