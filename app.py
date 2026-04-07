@@ -112,65 +112,62 @@ elif st.session_state['pagina_actual'] == "sistema":
             if archivo:
                 df_c = leer_archivo(archivo)
                 if df_c is not None:
-                    # Limpieza Carga
+                    # 1. LIMPIEZA TOTAL DE CARGA
                     df_c.columns = df_c.columns.str.strip().str.upper()
                     df_c['CODIGO'] = df_c['CODIGO'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                     df_c['DESCRIPCIÓN ZONA'] = df_c['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
                     df_c['BULTOS'] = pd.to_numeric(df_c['BULTOS'], errors='coerce').fillna(0)
                     
-                    # Limpieza Maestro GP
+                    # 2. LIMPIEZA TOTAL MAESTRO GP (Anti-Duplicados)
                     col_id_gp = [c for c in m_gp.columns if 'CODIGO' in c.upper()][0]
-                    m_gp_clean = m_gp.copy().drop_duplicates(subset=[col_id_gp])
+                    m_gp_clean = m_gp.copy()
                     m_gp_clean[col_id_gp] = m_gp_clean[col_id_gp].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+                    m_gp_clean = m_gp_clean.drop_duplicates(subset=[col_id_gp]) # ELIMINA DUPLICADOS REALES
                     
-                    # Limpieza Maestro Costos
+                    # 3. LIMPIEZA TOTAL MAESTRO COSTOS (Anti-Duplicados)
                     m_costos_clean = m_costos.copy()
                     m_costos_clean.columns = m_costos_clean.columns.str.strip().str.upper()
                     renames = {c: "P_PREP" for c in m_costos_clean.columns if "PREP" in c}
                     renames.update({c: "P_TRANS" for c in m_costos_clean.columns if "TRANS" in c})
                     renames.update({c: "DESCRIPCIÓN ZONA" for c in m_costos_clean.columns if "ZONA" in c})
-                    m_costos_clean = m_costos_clean.rename(columns=renames).drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
+                    m_costos_clean = m_costos_clean.rename(columns=renames)
                     m_costos_clean['DESCRIPCIÓN ZONA'] = m_costos_clean['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
+                    m_costos_clean = m_costos_clean.drop_duplicates(subset=['DESCRIPCIÓN ZONA']) # ELIMINA DUPLICADOS REALES
                     
+                    # 4. MERGE (Cruce de bases)
                     res = pd.merge(df_c, m_gp_clean[[col_id_gp, 'GP', 'TIPO']], left_on='CODIGO', right_on=col_id_gp, how='left')
                     res = pd.merge(res, m_costos_clean[['DESCRIPCIÓN ZONA', 'P_PREP', 'P_TRANS']], on='DESCRIPCIÓN ZONA', how='left')
 
-                    # --- PANEL DE ALERTAS TEMPRANAS (DASHBOARD DE ERRORES) ---
+                    # 5. PANEL DE ALERTAS TEMPRANAS
                     sin_gp = res[res['GP'].isna()]['CODIGO'].unique()
                     sin_tarifa = res[res['P_PREP'].isna()]['DESCRIPCIÓN ZONA'].unique()
 
                     if len(sin_gp) > 0 or len(sin_tarifa) > 0:
                         st.error("🛑 BLOQUEO DE SEGURIDAD: Datos incompletos detectados.")
-                        
                         col_e1, col_e2 = st.columns(2)
                         with col_e1:
                             if len(sin_gp) > 0:
                                 st.warning(f"❌ Códigos sin GP: {len(sin_gp)}")
-                                # Botón para descargar solo los errores de códigos
                                 df_err_gp = pd.DataFrame({'CODIGOS_FALTANTES': sin_gp})
                                 buffer_gp = io.BytesIO()
                                 df_err_gp.to_excel(buffer_gp, index=False)
-                                st.download_button("📥 Descargar códigos faltantes", buffer_gp.getvalue(), "faltantes_GP.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-                                
+                                st.download_button("📥 Descargar códigos faltantes", buffer_gp.getvalue(), "faltantes_GP.xlsx")
                         with col_e2:
                             if len(sin_tarifa) > 0:
                                 st.warning(f"❌ Zonas sin tarifa: {len(sin_tarifa)}")
-                                # Botón para descargar solo las zonas con error
                                 df_err_zo = pd.DataFrame({'ZONAS_SIN_TARIFA': sin_tarifa})
                                 buffer_zo = io.BytesIO()
                                 df_err_zo.to_excel(buffer_zo, index=False)
-                                st.download_button("📥 Descargar zonas faltantes", buffer_zo.getvalue(), "faltantes_Tarifas.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-                        
-                        if 'res_actual' in st.session_state: del st.session_state['res_actual']
+                                st.download_button("📥 Descargar zonas faltantes", buffer_zo.getvalue(), "faltantes_Tarifas.xlsx")
                     else:
-                        # Cálculos (INTACTO)
+                        # Cálculos correctos (Sin duplicación)
                         res['TOTAL_PREPARACION'] = res['P_PREP'] * res['BULTOS']
                         res['TOTAL_TRANSPORTE'] = res['P_TRANS'] * res['BULTOS']
                         res['SUBTOTAL_NETO'] = res['TOTAL_PREPARACION'] + res['TOTAL_TRANSPORTE']
                         res['IVA_15'] = res['SUBTOTAL_NETO'] * 0.15
                         res['TOTAL_FINAL'] = res['SUBTOTAL_NETO'] + res['IVA_15']
 
-                        st.subheader(f"📋 Resumen Consolidado: {mes_sel}")
+                        st.subheader(f"📋 Resumen: {mes_sel}")
                         summary = res.pivot_table(index='GP', columns='TIPO', values='SUBTOTAL_NETO', aggfunc='sum').fillna(0)
                         for col in ['MM', 'MP']:
                             if col not in summary.columns: summary[col] = 0.0
@@ -185,20 +182,20 @@ elif st.session_state['pagina_actual'] == "sistema":
                         out_sum = io.BytesIO()
                         with pd.ExcelWriter(out_sum, engine='openpyxl') as wr:
                             summary_f.to_excel(wr, index=False, sheet_name='Resumen')
-                        st.download_button("📥 Descargar Reporte Resumen (Excel)", out_sum.getvalue(), f"Resumen_Bago_{mes_sel}.xlsx")
+                        st.download_button("📥 Descargar Resumen (Excel)", out_sum.getvalue(), f"Resumen_Bago_{mes_sel}.xlsx")
 
                         if st.button("💾 Guardar en Historial"):
                             res['MES_PROCESO'] = mes_sel
                             res.to_csv(HISTORICO_FILE, mode='a', index=False, header=not os.path.exists(HISTORICO_FILE))
-                            st.success(f"Proceso de {mes_sel} guardado.")
+                            st.success("Guardado.")
 
                         st.session_state['res_actual'] = res
                         st.session_state['mes_actual'] = mes_sel
 
-    with tabs[1]: # DETALLE ACTUAL (INTACTO)
+    with tabs[1]: # DETALLE ACTUAL
         if 'res_actual' in st.session_state:
             df_full = st.session_state['res_actual']
-            st.markdown("### 🔍 Filtros de Búsqueda")
+            st.markdown("### 🔍 Filtros")
             f1, f2, f3 = st.columns(3)
             with f1: sel_gp = st.multiselect("Filtrar por GP", options=sorted(df_full['GP'].unique()))
             with f2: sel_tipo = st.multiselect("Filtrar por Tipo", options=sorted(df_full['TIPO'].unique()))
@@ -211,31 +208,31 @@ elif st.session_state['pagina_actual'] == "sistema":
 
             k1, k2, k3, k4 = st.columns(4)
             k1.metric("Bultos Filtrados", f"{df_v['BULTOS'].sum():,.0f}")
-            k2.metric("Preparación", f"$ {df_v['TOTAL_PREPARACION'].sum():,.2f}")
-            k3.metric("Transporte", f"$ {df_v['TOTAL_TRANSPORTE'].sum():,.2f}")
+            k2.metric("Prep.", f"$ {df_v['TOTAL_PREPARACION'].sum():,.2f}")
+            k3.metric("Trans.", f"$ {df_v['TOTAL_TRANSPORTE'].sum():,.2f}")
             k4.metric("Total Final", f"$ {df_v['TOTAL_FINAL'].sum():,.2f}")
             
             st.divider()
             out_det = io.BytesIO()
             with pd.ExcelWriter(out_det, engine='openpyxl') as writer:
                 df_v.to_excel(writer, index=False, sheet_name='Detalle')
-            st.download_button("📥 Descargar Detalle Filtrado (Excel)", out_det.getvalue(), f"Detalle_Bago_{st.session_state['mes_actual']}.xlsx")
+            st.download_button("📥 Descargar Detalle (Excel)", out_det.getvalue(), f"Detalle_{st.session_state['mes_actual']}.xlsx")
             st.dataframe(df_v, use_container_width=True)
 
-    with tabs[2]: # CONFIG (INTACTO)
+    with tabs[2]: # CONFIG
         st.header("⚙️ Maestros")
         ca, cb = st.columns(2)
         with ca:
-            ug = st.file_uploader("Cargar Maestro GP", type=['csv','xlsx'])
+            ug = st.file_uploader("Cargar GP", type=['csv','xlsx'])
             if ug:
-                d = leer_archivo(ug); d.to_csv(PATH_GP, index=False); st.success("GP actualizado.")
+                d = leer_archivo(ug); d.to_csv(PATH_GP, index=False); st.success("GP OK")
         with cb:
-            uc = st.file_uploader("Cargar Maestro Costos", type=['csv','xlsx'])
+            uc = st.file_uploader("Cargar Costos", type=['csv','xlsx'])
             if uc:
-                d = leer_archivo(uc); d.to_csv(PATH_COSTOS, index=False); st.success("Costos actualizado.")
+                d = leer_archivo(uc); d.to_csv(PATH_COSTOS, index=False); st.success("Costos OK")
 
-    with tabs[3]: # HISTORIAL (INTACTO + BOTÓN BORRAR PEQUEÑO)
-        st.header("🗄️ Histórico")
+    with tabs[3]: # HISTORIAL
+        st.header("🗄️ Historial")
         if os.path.exists(HISTORICO_FILE):
             df_h = pd.read_csv(HISTORICO_FILE)
             opciones_mes = sorted(df_h['MES_PROCESO'].unique())
