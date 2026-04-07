@@ -82,11 +82,16 @@ elif st.session_state['pagina_actual'] == "sistema":
     HISTORICO_FILE = "base_historica_bago.csv"
 
     def cargar_maestro(path): return pd.read_csv(path) if os.path.exists(path) else None
+    
     def leer_archivo(archivo):
         try:
             if archivo.name.lower().endswith(('.xlsx', '.xls')): return pd.read_excel(archivo)
             return pd.read_csv(archivo, encoding='latin-1')
         except: return None
+
+    # Función crítica para que los cruces no fallen por formato
+    def limpiar_serie(serie):
+        return serie.astype(str).str.strip().str.upper().str.replace(r'\.0$', '', regex=True)
 
     st.title("📊 Control de Liquidación Logística")
     tabs = st.tabs(["🚀 Liquidación Mensual", "🔍 Detalle Actual", "⚙️ Configurar Maestros", "🗄️ Historial"])
@@ -105,27 +110,31 @@ elif st.session_state['pagina_actual'] == "sistema":
             if archivo:
                 df_raw = leer_archivo(archivo)
                 if df_raw is not None:
-                    # 1. LIMPIEZA DE CARGA
+                    # 1. NORMALIZACIÓN DE CARGA MENSUAL
                     df_raw.columns = df_raw.columns.str.strip().str.upper()
-                    df_raw['CODIGO'] = df_raw['CODIGO'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip().str.upper()
-                    df_raw['DESCRIPCIÓN ZONA'] = df_raw['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
+                    df_raw['CODIGO'] = limpiar_serie(df_raw['CODIGO'])
+                    df_raw['DESCRIPCIÓN ZONA'] = limpiar_serie(df_raw['DESCRIPCIÓN ZONA'])
                     df_raw['BULTOS'] = pd.to_numeric(df_raw['BULTOS'], errors='coerce').fillna(0)
+                    
+                    # Consolidación (Suma bultos por código/zona)
                     df_c = df_raw.groupby(['CODIGO', 'DESCRIPCIÓN ZONA'], as_index=False)['BULTOS'].sum()
                     
-                    # 2. LIMPIEZA DE MAESTROS (Fuerza registros únicos)
+                    # 2. NORMALIZACIÓN MAESTRO GP
                     col_id_gp = [c for c in m_gp.columns if 'CODIGO' in c.upper()][0]
-                    m_gp_clean = m_gp.copy().drop_duplicates(subset=[col_id_gp])
-                    m_gp_clean[col_id_gp] = m_gp_clean[col_id_gp].astype(str).str.replace(r'\.0$', '', regex=True).str.strip().str.upper()
+                    m_gp_clean = m_gp.copy()
+                    m_gp_clean[col_id_gp] = limpiar_serie(m_gp_clean[col_id_gp])
+                    m_gp_clean = m_gp_clean.drop_duplicates(subset=[col_id_gp])
                     
+                    # 3. NORMALIZACIÓN MAESTRO COSTOS
                     m_costos_clean = m_costos.copy()
                     m_costos_clean.columns = m_costos_clean.columns.str.strip().str.upper()
+                    m_costos_clean['DESCRIPCIÓN ZONA'] = limpiar_serie(m_costos_clean['DESCRIPCIÓN ZONA'])
+                    
                     ren = {c: "P_PREP" for c in m_costos_clean.columns if "PREP" in c}
                     ren.update({c: "P_TRANS" for c in m_costos_clean.columns if "TRANS" in c})
-                    ren.update({c: "DESCRIPCIÓN ZONA" for c in m_costos_clean.columns if "ZONA" in c})
                     m_costos_clean = m_costos_clean.rename(columns=ren).drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
-                    m_costos_clean['DESCRIPCIÓN ZONA'] = m_costos_clean['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
                     
-                    # 3. MAPEADO (Evita duplicados)
+                    # 4. CRUCE DE DATOS (DICCIONARIOS PARA CERO DUPLICADOS)
                     dict_gp = m_gp_clean.set_index(col_id_gp)['GP'].to_dict()
                     dict_tipo = m_gp_clean.set_index(col_id_gp)['TIPO'].to_dict()
                     dict_prep = m_costos_clean.set_index('DESCRIPCIÓN ZONA')['P_PREP'].to_dict()
@@ -137,19 +146,19 @@ elif st.session_state['pagina_actual'] == "sistema":
                     res['P_PREP'] = res['DESCRIPCIÓN ZONA'].map(dict_prep)
                     res['P_TRANS'] = res['DESCRIPCIÓN ZONA'].map(dict_trans)
 
-                    # 4. VERIFICACIÓN AL COMIENZO (RESTAURADA)
+                    # 5. VALIDACIÓN DE ENTRADA (RESTABLECIDA Y MEJORADA)
                     sin_gp = res[res['GP'].isna()]['CODIGO'].unique()
                     sin_tar = res[res['P_PREP'].isna()]['DESCRIPCIÓN ZONA'].unique()
 
                     if len(sin_gp) > 0 or len(sin_tar) > 0:
-                        st.error("🛑 BLOQUEO: Se encontraron datos que no están en tus Maestros.")
-                        c_err1, c_err2 = st.columns(2)
-                        with c_err1:
+                        st.error("🛑 ERROR DE MAESTROS: Los siguientes datos no se encontraron.")
+                        col_e1, col_e2 = st.columns(2)
+                        with col_e1:
                             if len(sin_gp) > 0: st.warning(f"❌ Códigos sin GP: {list(sin_gp)}")
-                        with c_err2:
+                        with col_e2:
                             if len(sin_tar) > 0: st.warning(f"❌ Zonas sin Tarifa: {list(sin_tar)}")
                     else:
-                        # 5. CÁLCULOS
+                        # 6. CÁLCULOS
                         res['TOTAL_PREPARACION'] = res['P_PREP'] * res['BULTOS']
                         res['TOTAL_TRANSPORTE'] = res['P_TRANS'] * res['BULTOS']
                         res['SUBTOTAL_NETO'] = res['TOTAL_PREPARACION'] + res['TOTAL_TRANSPORTE']
@@ -158,6 +167,8 @@ elif st.session_state['pagina_actual'] == "sistema":
 
                         st.subheader(f"📋 Resumen: {mes_sel}")
                         summary = res.pivot_table(index='GP', columns='TIPO', values='SUBTOTAL_NETO', aggfunc='sum').fillna(0)
+                        
+                        # Asegurar columnas MM y MP
                         for col in ['MM', 'MP']:
                             if col not in summary.columns: summary[col] = 0.0
                         
@@ -168,12 +179,13 @@ elif st.session_state['pagina_actual'] == "sistema":
                         summary_f = pd.concat([summary.reset_index(), pd.DataFrame([{'GP': '--- TOTALES ---', **summary.sum()}])], ignore_index=True)
                         st.table(summary_f.style.format(subset=summary_f.columns[1:], formatter="{:,.2f}"))
                         
-                        # 6. GUARDAR (CORREGIDO PARA NO BORRAR)
+                        # GUARDADO HISTÓRICO (MODO APPEND REAL)
                         if st.button("💾 Guardar en Historial"):
                             res['MES_PROCESO'] = mes_sel
+                            # Escribir con encabezado solo si el archivo no existe
                             header_condition = not os.path.exists(HISTORICO_FILE)
                             res.to_csv(HISTORICO_FILE, mode='a', index=False, header=header_condition)
-                            st.success(f"¡Datos de {mes_sel} añadidos al historial!")
+                            st.success(f"✅ ¡Datos de {mes_sel} añadidos al historial!")
 
                         st.session_state['res_actual'] = res
                         st.session_state['mes_actual'] = mes_sel
@@ -193,20 +205,22 @@ elif st.session_state['pagina_actual'] == "sistema":
         st.header("⚙️ Maestros")
         ca, cb = st.columns(2)
         with ca:
-            ug = st.file_uploader("Cargar Maestro GP", type=['csv','xlsx'])
-            if ug: d = leer_archivo(ug); d.to_csv(PATH_GP, index=False); st.success("GP OK")
+            ug = st.file_uploader("Cargar GP", type=['csv','xlsx'])
+            if ug: d = leer_archivo(ug); d.to_csv(PATH_GP, index=False); st.success("Maestro GP actualizado")
         with cb:
-            uc = st.file_uploader("Cargar Maestro Costos", type=['csv','xlsx'])
-            if uc: d = leer_archivo(uc); d.to_csv(PATH_COSTOS, index=False); st.success("Costos OK")
+            uc = st.file_uploader("Cargar Costos", type=['csv','xlsx'])
+            if uc: d = leer_archivo(uc); d.to_csv(PATH_COSTOS, index=False); st.success("Maestro Costos actualizado")
 
     with tabs[3]: # HISTORIAL
         st.header("🗄️ Historial")
         if os.path.exists(HISTORICO_FILE):
             df_h = pd.read_csv(HISTORICO_FILE)
-            meses_disponibles = df_h['MES_PROCESO'].dropna().unique()
-            opciones_mes = sorted([str(m) for m in meses_disponibles])
-            if opciones_mes:
-                m_h = st.selectbox("Ver Mes:", opciones_mes)
+            # Limpiar nulos para evitar errores en el selector
+            meses_disp = df_h['MES_PROCESO'].dropna().unique()
+            op_mes = sorted([str(m) for m in meses_disp])
+            
+            if op_mes:
+                m_h = st.selectbox("Ver Mes:", op_mes)
                 st.dataframe(df_h[df_h['MES_PROCESO'] == m_h], use_container_width=True)
                 
                 st.markdown("<br>", unsafe_allow_html=True)
@@ -215,5 +229,6 @@ elif st.session_state['pagina_actual'] == "sistema":
                     st.markdown('<div class="small-btn">', unsafe_allow_html=True)
                     if st.button(f"🗑️ Eliminar historial de {m_h}", key="del_btn"):
                         df_h = df_h[df_h['MES_PROCESO'] != m_h]
-                        df_h.to_csv(HISTORICO_FILE, index=False); st.rerun()
+                        df_h.to_csv(HISTORICO_FILE, index=False)
+                        st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)
