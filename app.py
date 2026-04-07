@@ -182,4 +182,61 @@ elif st.session_state['pagina_actual'] == "sistema":
             df_full = st.session_state['res_actual']
             st.markdown("### 🔍 Filtros")
             f1, f2, f3 = st.columns(3)
-            with f1: sel_gp = st.multiselect("GP
+            with f1: sel_gp = st.multiselect("GP", options=sorted(df_full['GP'].unique()))
+            with f2: sel_tipo = st.multiselect("Tipo", options=sorted(df_full['TIPO'].unique()))
+            with f3: sel_zona = st.multiselect("Zona", options=sorted(df_full['DESCRIPCIÓN ZONA'].unique()))
+
+            df_v = df_full.copy()
+            if sel_gp: df_v = df_v[df_v['GP'].isin(sel_gp)]
+            if sel_tipo: df_v = df_v[df_v['TIPO'].isin(sel_tipo)]
+            if sel_zona: df_v = df_v[df_v['DESCRIPCIÓN ZONA'].isin(sel_zona)]
+
+            k1, k2, k3, k4 = st.columns(4)
+            k1.metric("Bultos", f"{df_v['BULTOS'].sum():,.0f}")
+            k2.metric("Prep.", f"$ {df_v['TOTAL_PREPARACION'].sum():,.2f}")
+            k3.metric("Trans.", f"$ {df_v['TOTAL_TRANSPORTE'].sum():,.2f}")
+            k4.metric("Total", f"$ {df_v['TOTAL_FINAL'].sum():,.2f}")
+            
+            st.divider()
+            out_det = io.BytesIO()
+            with pd.ExcelWriter(out_det, engine='openpyxl') as writer:
+                df_v.to_excel(writer, index=False, sheet_name='Detalle')
+            st.download_button("📥 Descargar Detalle", out_det.getvalue(), f"Detalle_Bago_{st.session_state['mes_actual']}.xlsx")
+            st.dataframe(df_v, use_container_width=True)
+
+    with tabs[2]: # CONFIG
+        st.header("⚙️ Maestros")
+        ca, cb = st.columns(2)
+        with ca:
+            ug = st.file_uploader("Cargar GP", type=['csv','xlsx'])
+            if ug:
+                d = leer_archivo(ug); d.to_csv(PATH_GP, index=False); st.success("GP OK")
+        with cb:
+            uc = st.file_uploader("Cargar Costos", type=['csv','xlsx'])
+            if uc:
+                d = leer_archivo(uc); d.to_csv(PATH_COSTOS, index=False); st.success("Costos OK")
+
+    with tabs[3]: # HISTORIAL
+        st.header("🗄️ Historial")
+        if os.path.exists(HISTORICO_FILE):
+            df_h = pd.read_csv(HISTORICO_FILE)
+            opciones_mes = sorted(df_h['MES_PROCESO'].unique())
+            m_h = st.selectbox("Ver Mes:", opciones_mes)
+            
+            # Tabla de historial
+            df_mostrar = df_h[df_h['MES_PROCESO'] == m_h]
+            st.dataframe(df_mostrar, use_container_width=True)
+            
+            st.markdown("<br><br>", unsafe_allow_html=True)
+            # --- BOTÓN DE BORRADO EN LA PARTE INFERIOR Y MÁS PEQUEÑO ---
+            col_b, _ = st.columns([1, 4])
+            with col_b:
+                st.markdown('<div class="small-btn">', unsafe_allow_html=True)
+                if st.button(f"🗑️ Eliminar historial de {m_h}", key="del_btn"):
+                    df_h = df_h[df_h['MES_PROCESO'] != m_h]
+                    df_h.to_csv(HISTORICO_FILE, index=False)
+                    st.toast(f"Eliminado {m_h}")
+                    st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
+        else:
+            st.info("Vacío.")
