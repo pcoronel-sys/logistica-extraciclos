@@ -25,7 +25,7 @@ st.markdown(f"""
         border: 1px solid rgba(200, 200, 200, 0.3) !important; 
         border-radius: 20px !important; 
         height: 100px !important; 
-        width: 100% !important; 
+        width: 150% !important; 
         box-shadow: 0 20px 40px rgba(0,0,0,0.05) !important; 
         transition: all 0.6s cubic-bezier(0.165, 0.84, 0.44, 1.0) !important; 
         font-size: 1.4rem !important; 
@@ -112,33 +112,26 @@ elif st.session_state['pagina_actual'] == "sistema":
             if archivo:
                 df_c = leer_archivo(archivo)
                 if df_c is not None:
-                    # 1. LIMPIEZA TOTAL DE CARGA
                     df_c.columns = df_c.columns.str.strip().str.upper()
                     df_c['CODIGO'] = df_c['CODIGO'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                     df_c['DESCRIPCIÓN ZONA'] = df_c['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
                     df_c['BULTOS'] = pd.to_numeric(df_c['BULTOS'], errors='coerce').fillna(0)
                     
-                    # 2. LIMPIEZA TOTAL MAESTRO GP (Anti-Duplicados)
                     col_id_gp = [c for c in m_gp.columns if 'CODIGO' in c.upper()][0]
-                    m_gp_clean = m_gp.copy()
+                    m_gp_clean = m_gp.copy().drop_duplicates(subset=[col_id_gp])
                     m_gp_clean[col_id_gp] = m_gp_clean[col_id_gp].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
-                    m_gp_clean = m_gp_clean.drop_duplicates(subset=[col_id_gp]) # ELIMINA DUPLICADOS REALES
                     
-                    # 3. LIMPIEZA TOTAL MAESTRO COSTOS (Anti-Duplicados)
                     m_costos_clean = m_costos.copy()
                     m_costos_clean.columns = m_costos_clean.columns.str.strip().str.upper()
                     renames = {c: "P_PREP" for c in m_costos_clean.columns if "PREP" in c}
                     renames.update({c: "P_TRANS" for c in m_costos_clean.columns if "TRANS" in c})
                     renames.update({c: "DESCRIPCIÓN ZONA" for c in m_costos_clean.columns if "ZONA" in c})
-                    m_costos_clean = m_costos_clean.rename(columns=renames)
+                    m_costos_clean = m_costos_clean.rename(columns=renames).drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
                     m_costos_clean['DESCRIPCIÓN ZONA'] = m_costos_clean['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
-                    m_costos_clean = m_costos_clean.drop_duplicates(subset=['DESCRIPCIÓN ZONA']) # ELIMINA DUPLICADOS REALES
                     
-                    # 4. MERGE (Cruce de bases)
                     res = pd.merge(df_c, m_gp_clean[[col_id_gp, 'GP', 'TIPO']], left_on='CODIGO', right_on=col_id_gp, how='left')
                     res = pd.merge(res, m_costos_clean[['DESCRIPCIÓN ZONA', 'P_PREP', 'P_TRANS']], on='DESCRIPCIÓN ZONA', how='left')
 
-                    # 5. PANEL DE ALERTAS TEMPRANAS
                     sin_gp = res[res['GP'].isna()]['CODIGO'].unique()
                     sin_tarifa = res[res['P_PREP'].isna()]['DESCRIPCIÓN ZONA'].unique()
 
@@ -148,19 +141,16 @@ elif st.session_state['pagina_actual'] == "sistema":
                         with col_e1:
                             if len(sin_gp) > 0:
                                 st.warning(f"❌ Códigos sin GP: {len(sin_gp)}")
-                                df_err_gp = pd.DataFrame({'CODIGOS_FALTANTES': sin_gp})
-                                buffer_gp = io.BytesIO()
-                                df_err_gp.to_excel(buffer_gp, index=False)
-                                st.download_button("📥 Descargar códigos faltantes", buffer_gp.getvalue(), "faltantes_GP.xlsx")
+                                b_gp = io.BytesIO()
+                                pd.DataFrame({'CODIGOS_FALTANTES': sin_gp}).to_excel(b_gp, index=False)
+                                st.download_button("📥 Descargar códigos faltantes", b_gp.getvalue(), "faltantes_GP.xlsx")
                         with col_e2:
                             if len(sin_tarifa) > 0:
                                 st.warning(f"❌ Zonas sin tarifa: {len(sin_tarifa)}")
-                                df_err_zo = pd.DataFrame({'ZONAS_SIN_TARIFA': sin_tarifa})
-                                buffer_zo = io.BytesIO()
-                                df_err_zo.to_excel(buffer_zo, index=False)
-                                st.download_button("📥 Descargar zonas faltantes", buffer_zo.getvalue(), "faltantes_Tarifas.xlsx")
+                                b_zo = io.BytesIO()
+                                pd.DataFrame({'ZONAS_SIN_TARIFA': sin_tarifa}).to_excel(b_zo, index=False)
+                                st.download_button("📥 Descargar zonas faltantes", b_zo.getvalue(), "faltantes_Tarifas.xlsx")
                     else:
-                        # Cálculos correctos (Sin duplicación)
                         res['TOTAL_PREPARACION'] = res['P_PREP'] * res['BULTOS']
                         res['TOTAL_TRANSPORTE'] = res['P_TRANS'] * res['BULTOS']
                         res['SUBTOTAL_NETO'] = res['TOTAL_PREPARACION'] + res['TOTAL_TRANSPORTE']
@@ -184,13 +174,11 @@ elif st.session_state['pagina_actual'] == "sistema":
                             summary_f.to_excel(wr, index=False, sheet_name='Resumen')
                         st.download_button("📥 Descargar Resumen (Excel)", out_sum.getvalue(), f"Resumen_Bago_{mes_sel}.xlsx")
 
-                        # --- AJUSTE AQUÍ: GUARDAR CON MODO APPEND ---
                         if st.button("💾 Guardar en Historial"):
                             res['MES_PROCESO'] = mes_sel
-                            # Verificamos si el archivo existe para saber si escribimos el encabezado
                             header_condition = not os.path.exists(HISTORICO_FILE)
                             res.to_csv(HISTORICO_FILE, mode='a', index=False, header=header_condition)
-                            st.success(f"¡Datos de {mes_sel} añadidos al historial con éxito!")
+                            st.success(f"¡Datos de {mes_sel} añadidos al historial!")
 
                         st.session_state['res_actual'] = res
                         st.session_state['mes_actual'] = mes_sel
@@ -234,20 +222,26 @@ elif st.session_state['pagina_actual'] == "sistema":
             if uc:
                 d = leer_archivo(uc); d.to_csv(PATH_COSTOS, index=False); st.success("Costos OK")
 
-    with tabs[3]: # HISTORIAL
+    with tabs[3]: # HISTORIAL (Línea 241 corregida)
         st.header("🗄️ Historial")
         if os.path.exists(HISTORICO_FILE):
             df_h = pd.read_csv(HISTORICO_FILE)
-            opciones_mes = sorted(df_h['MES_PROCESO'].unique())
-            m_h = st.selectbox("Ver Mes:", opciones_mes)
-            st.dataframe(df_h[df_h['MES_PROCESO'] == m_h], use_container_width=True)
+            # Limpiamos nulos para evitar el TypeError en el sorted()
+            meses_disponibles = df_h['MES_PROCESO'].dropna().unique()
+            opciones_mes = sorted([str(m) for m in meses_disponibles])
             
-            st.markdown("<br>", unsafe_allow_html=True)
-            col_b, _ = st.columns([1, 4])
-            with col_b:
-                st.markdown('<div class="small-btn">', unsafe_allow_html=True)
-                if st.button(f"🗑️ Eliminar historial de {m_h}", key="del_btn"):
-                    df_h = df_h[df_h['MES_PROCESO'] != m_h]
-                    df_h.to_csv(HISTORICO_FILE, index=False)
-                    st.rerun()
-                st.markdown('</div>', unsafe_allow_html=True)
+            if opciones_mes:
+                m_h = st.selectbox("Ver Mes:", opciones_mes)
+                st.dataframe(df_h[df_h['MES_PROCESO'] == m_h], use_container_width=True)
+                
+                st.markdown("<br>", unsafe_allow_html=True)
+                col_b, _ = st.columns([1, 4])
+                with col_b:
+                    st.markdown('<div class="small-btn">', unsafe_allow_html=True)
+                    if st.button(f"🗑️ Eliminar historial de {m_h}", key="del_btn"):
+                        df_h = df_h[df_h['MES_PROCESO'] != m_h]
+                        df_h.to_csv(HISTORICO_FILE, index=False)
+                        st.rerun()
+                    st.markdown('</div>', unsafe_allow_html=True)
+            else:
+                st.info("El historial está vacío o tiene datos corruptos.")
