@@ -77,6 +77,7 @@ elif st.session_state['pagina_actual'] == "sistema":
     st.title("📊 Control de Liquidación Logística")
     tabs = st.tabs(["🚀 Liquidación Mensual", "🔍 Detalle Actual", "⚙️ Configurar Maestros"])
 
+    # Carga de maestros
     m_gp = pd.read_csv(PATH_GP) if os.path.exists(PATH_GP) else None
     m_costos = pd.read_csv(PATH_COSTOS) if os.path.exists(PATH_COSTOS) else None
 
@@ -91,7 +92,7 @@ elif st.session_state['pagina_actual'] == "sistema":
             if archivo:
                 df_raw = pd.read_excel(archivo) if archivo.name.endswith('.xlsx') else pd.read_csv(archivo, encoding='latin-1')
                 if df_raw is not None:
-                    # 1. CONSOLIDACIÓN INICIAL
+                    # 1. LIMPIEZA CARGA
                     df_raw.columns = df_raw.columns.str.strip().str.upper()
                     df_raw['CODIGO'] = limpiar_texto(df_raw['CODIGO'])
                     df_raw['DESCRIPCIÓN ZONA'] = limpiar_texto(df_raw['DESCRIPCIÓN ZONA'])
@@ -114,31 +115,39 @@ elif st.session_state['pagina_actual'] == "sistema":
                     res = pd.merge(df_c, m_gp_clean[[col_id, 'GP', 'TIPO']], left_on='CODIGO', right_on=col_id, how='left')
                     res = pd.merge(res, m_costos_clean[['DESCRIPCIÓN ZONA', 'P_PREP', 'P_TRANS']], on='DESCRIPCIÓN ZONA', how='left')
 
-                    # 4. VALIDACIÓN DE REGISTROS + DESCARGA DE ERRORES
-                    sin_gp = res[res['GP'].isna()]['CODIGO'].unique()
-                    sin_tar = res[res['P_PREP'].isna()]['DESCRIPCIÓN ZONA'].unique()
+                    # 4. VALIDACIÓN DE REGISTROS (ALERTAS)
+                    # Detectamos específicamente los que tienen valor nulo tras el cruce
+                    df_sin_gp = res[res['GP'].isna()]
+                    df_sin_tarifa = res[res['P_PREP'].isna()]
 
-                    if len(sin_gp) > 0 or len(sin_tar) > 0:
-                        st.error("🛑 BLOQUEO: Hay datos que no existen en los Maestros.")
+                    if not df_sin_gp.empty or not df_sin_tarifa.empty:
+                        st.error("🛑 BLOQUEO DE SEGURIDAD: Datos faltantes detectados.")
+                        st.markdown("### Por favor, corrija los siguientes errores antes de continuar:")
                         
-                        col_err1, col_err2 = st.columns(2)
-                        with col_err1:
-                            if len(sin_gp) > 0:
-                                st.warning(f"Códigos sin GP: {len(sin_gp)}")
-                                df_err_gp = pd.DataFrame({'CODIGOS_FALTANTES': sin_gp})
+                        col_e1, col_e2 = st.columns(2)
+                        
+                        with col_e1:
+                            if not df_sin_gp.empty:
+                                codigos_err = df_sin_gp['CODIGO'].unique()
+                                st.warning(f"❌ {len(codigos_err)} Código(s) no registrados en Maestro GP.")
+                                df_err_gp = pd.DataFrame({'CODIGOS_FALTANTES': codigos_err})
                                 buffer_gp = io.BytesIO()
                                 with pd.ExcelWriter(buffer_gp, engine='openpyxl') as wr: df_err_gp.to_excel(wr, index=False)
-                                st.download_button("📥 Descargar Códigos Faltantes", buffer_gp.getvalue(), "codigos_no_encontrados.xlsx")
-                        
-                        with col_err2:
-                            if len(sin_tar) > 0:
-                                st.warning(f"Zonas sin Tarifa: {len(sin_tar)}")
-                                df_err_zo = pd.DataFrame({'ZONAS_FALTANTES': sin_tar})
+                                st.download_button("📥 Descargar Lista de Códigos Faltantes", buffer_gp.getvalue(), "error_codigos.xlsx", key="btn_err_gp")
+
+                        with col_e2:
+                            if not df_sin_tarifa.empty:
+                                zonas_err = df_sin_tarifa['DESCRIPCIÓN ZONA'].unique()
+                                st.warning(f"❌ {len(zonas_err)} Zona(s) no registradas en Maestro Costos.")
+                                df_err_zo = pd.DataFrame({'ZONAS_FALTANTES': zonas_err})
                                 buffer_zo = io.BytesIO()
                                 with pd.ExcelWriter(buffer_zo, engine='openpyxl') as wr: df_err_zo.to_excel(wr, index=False)
-                                st.download_button("📥 Descargar Zonas Faltantes", buffer_zo.getvalue(), "zonas_no_encontradas.xlsx")
+                                st.download_button("📥 Descargar Lista de Zonas Faltantes", buffer_zo.getvalue(), "error_zonas.xlsx", key="btn_err_zo")
+                        
+                        st.info("💡 Una vez que actualices los maestros en la pestaña 'Configurar Maestros', vuelve a subir el archivo aquí.")
+                    
                     else:
-                        # 5. CÁLCULOS
+                        # 5. CÁLCULOS SI TODO ESTÁ OK
                         res['TOTAL_PREPARACION'] = res['P_PREP'] * res['BULTOS']
                         res['TOTAL_TRANSPORTE'] = res['P_TRANS'] * res['BULTOS']
                         res['SUBTOTAL_NETO'] = res['TOTAL_PREPARACION'] + res['TOTAL_TRANSPORTE']
@@ -157,10 +166,9 @@ elif st.session_state['pagina_actual'] == "sistema":
                         summary_f = pd.concat([summary.reset_index(), pd.DataFrame([{'GP': '--- TOTALES ---', **summary.sum()}])], ignore_index=True)
                         st.table(summary_f.style.format(subset=summary_f.columns[1:], formatter="{:,.2f}"))
 
-                        # Botón para descargar el resumen final
                         out_final = io.BytesIO()
                         with pd.ExcelWriter(out_final, engine='openpyxl') as wr: summary_f.to_excel(wr, index=False)
-                        st.download_button("📥 Descargar Reporte Final (Excel)", out_final.getvalue(), f"Reporte_Bago_{mes_sel}.xlsx")
+                        st.download_button("📥 Descargar Reporte Final (Excel)", out_final.getvalue(), f"Liquidacion_{mes_sel}.xlsx")
 
                         st.session_state['res_actual'] = res
 
@@ -175,7 +183,7 @@ elif st.session_state['pagina_actual'] == "sistema":
             st.divider()
             st.dataframe(df_v, use_container_width=True)
 
-    with tabs[2]: # CONFIGURACIÓN
+    with tabs[2]: # CONFIG
         st.header("⚙️ Configuración")
         ca, cb = st.columns(2)
         with ca:
@@ -184,9 +192,11 @@ elif st.session_state['pagina_actual'] == "sistema":
                 d_gp = pd.read_excel(u1) if u1.name.endswith('.xlsx') else pd.read_csv(u1)
                 d_gp.to_csv(PATH_GP, index=False)
                 st.success("GP actualizado.")
+                st.rerun()
         with cb:
             u2 = st.file_uploader("Actualizar Maestro Costos", type=['xlsx', 'csv'], key="u2")
             if u2:
                 d_costos = pd.read_excel(u2) if u2.name.endswith('.xlsx') else pd.read_csv(u2)
                 d_costos.to_csv(PATH_COSTOS, index=False)
                 st.success("Costos actualizados.")
+                st.rerun()
