@@ -25,7 +25,7 @@ st.markdown(f"""
         border: 1px solid rgba(200, 200, 200, 0.3) !important; 
         border-radius: 20px !important; 
         height: 100px !important; 
-        width: 150% !important; 
+        width: 100% !important; 
         box-shadow: 0 20px 40px rgba(0,0,0,0.05) !important; 
         transition: all 0.6s cubic-bezier(0.165, 0.84, 0.44, 1.0) !important; 
         font-size: 1.4rem !important; 
@@ -108,26 +108,34 @@ elif st.session_state['pagina_actual'] == "sistema":
             if archivo:
                 df_raw = leer_archivo(archivo)
                 if df_raw is not None:
-                    # 1. NORMALIZACIÓN Y CONSOLIDACIÓN DE CARGA (Suma bultos repetidos en el Excel)
+                    # 1. LIMPIEZA EXTREMA DE CARGA
                     df_raw.columns = df_raw.columns.str.strip().str.upper()
-                    df_raw['CODIGO'] = df_raw['CODIGO'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+                    df_raw['CODIGO'] = df_raw['CODIGO'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip().str.upper()
                     df_raw['DESCRIPCIÓN ZONA'] = df_raw['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
                     df_raw['BULTOS'] = pd.to_numeric(df_raw['BULTOS'], errors='coerce').fillna(0)
+                    
+                    # Consolidación (Suma bultos)
                     df_c = df_raw.groupby(['CODIGO', 'DESCRIPCIÓN ZONA'], as_index=False)['BULTOS'].sum()
                     
-                    # 2. LIMPIEZA DE MAESTROS (Fuerza registros únicos para evitar duplicados)
+                    # 2. LIMPIEZA EXTREMA MAESTRO GP
                     col_id_gp = [c for c in m_gp.columns if 'CODIGO' in c.upper()][0]
-                    m_gp_clean = m_gp.copy().drop_duplicates(subset=[col_id_gp])
-                    m_gp_clean[col_id_gp] = m_gp_clean[col_id_gp].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+                    m_gp_clean = m_gp.copy()
+                    m_gp_clean[col_id_gp] = m_gp_clean[col_id_gp].astype(str).str.replace(r'\.0$', '', regex=True).str.strip().str.upper()
+                    m_gp_clean['GP'] = m_gp_clean['GP'].astype(str).str.strip().str.upper()
+                    m_gp_clean['TIPO'] = m_gp_clean['TIPO'].astype(str).str.strip().str.upper()
+                    m_gp_clean = m_gp_clean.drop_duplicates(subset=[col_id_gp])
                     
+                    # 3. LIMPIEZA EXTREMA MAESTRO COSTOS
                     m_costos_clean = m_costos.copy()
                     m_costos_clean.columns = m_costos_clean.columns.str.strip().str.upper()
                     ren = {c: "P_PREP" for c in m_costos_clean.columns if "PREP" in c}
                     ren.update({c: "P_TRANS" for c in m_costos_clean.columns if "TRANS" in c})
                     ren.update({c: "DESCRIPCIÓN ZONA" for c in m_costos_clean.columns if "ZONA" in c})
-                    m_costos_clean = m_costos_clean.rename(columns=ren).drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
+                    m_costos_clean = m_costos_clean.rename(columns=ren)
+                    m_costos_clean['DESCRIPCIÓN ZONA'] = m_costos_clean['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
+                    m_costos_clean = m_costos_clean.drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
                     
-                    # 3. MAPEADO (Diccionarios para evitar MERGE que duplica filas)
+                    # 4. MAPEADO (Evita duplicados y errores de cruce)
                     dict_gp = m_gp_clean.set_index(col_id_gp)['GP'].to_dict()
                     dict_tipo = m_gp_clean.set_index(col_id_gp)['TIPO'].to_dict()
                     dict_prep = m_costos_clean.set_index('DESCRIPCIÓN ZONA')['P_PREP'].to_dict()
@@ -139,26 +147,25 @@ elif st.session_state['pagina_actual'] == "sistema":
                     res['P_PREP'] = res['DESCRIPCIÓN ZONA'].map(dict_prep)
                     res['P_TRANS'] = res['DESCRIPCIÓN ZONA'].map(dict_trans)
 
-                    # 4. VALIDACIÓN DE ERRORES
+                    # 5. VALIDACIÓN DE ERRORES (MOSTRAR QUÉ FALTA)
                     sin_gp = res[res['GP'].isna()]['CODIGO'].unique()
                     sin_tar = res[res['P_PREP'].isna()]['DESCRIPCIÓN ZONA'].unique()
 
                     if len(sin_gp) > 0 or len(sin_tar) > 0:
-                        st.error("🛑 BLOQUEO: Datos incompletos.")
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            if len(sin_gp) > 0: st.warning(f"Códigos no en GP: {list(sin_gp)}")
-                        with col2:
-                            if len(sin_tar) > 0: st.warning(f"Zonas sin tarifa: {list(sin_tar)}")
+                        st.error("🛑 DATOS NO ENCONTRADOS EN MAESTROS")
+                        if len(sin_gp) > 0: 
+                            st.warning(f"Códigos no existen en Maestro GP: {list(sin_gp)}")
+                        if len(sin_tar) > 0: 
+                            st.warning(f"Zonas no existen en Maestro Costos: {list(sin_tar)}")
                     else:
-                        # 5. CÁLCULOS
+                        # 6. CÁLCULOS FINALES
                         res['TOTAL_PREPARACION'] = res['P_PREP'] * res['BULTOS']
                         res['TOTAL_TRANSPORTE'] = res['P_TRANS'] * res['BULTOS']
                         res['SUBTOTAL_NETO'] = res['TOTAL_PREPARACION'] + res['TOTAL_TRANSPORTE']
                         res['IVA_15'] = res['SUBTOTAL_NETO'] * 0.15
                         res['TOTAL_FINAL'] = res['SUBTOTAL_NETO'] + res['IVA_15']
 
-                        st.subheader(f"📋 Resumen Consolidado: {mes_sel}")
+                        st.subheader(f"📋 Resumen: {mes_sel}")
                         summary = res.pivot_table(index='GP', columns='TIPO', values='SUBTOTAL_NETO', aggfunc='sum').fillna(0)
                         for col in ['MM', 'MP']:
                             if col not in summary.columns: summary[col] = 0.0
@@ -174,7 +181,7 @@ elif st.session_state['pagina_actual'] == "sistema":
                             res['MES_PROCESO'] = mes_sel
                             existe = os.path.exists(HISTORICO_FILE)
                             res.to_csv(HISTORICO_FILE, mode='a', index=False, header=not existe)
-                            st.success(f"¡Datos de {mes_sel} añadidos!")
+                            st.success(f"¡Datos de {mes_sel} añadidos correctamente!")
 
                         st.session_state['res_actual'] = res
                         st.session_state['mes_actual'] = mes_sel
