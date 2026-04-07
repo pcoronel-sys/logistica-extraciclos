@@ -103,42 +103,44 @@ elif st.session_state['pagina_actual'] == "sistema":
             if archivo:
                 df_c = leer_archivo(archivo)
                 if df_c is not None:
-                    # --- NORMALIZACIÓN AGRESIVA DE CARGA ---
+                    # Normalización
                     df_c.columns = df_c.columns.str.strip().str.upper()
                     df_c['CODIGO'] = df_c['CODIGO'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                     df_c['DESCRIPCIÓN ZONA'] = df_c['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
                     df_c['BULTOS'] = pd.to_numeric(df_c['BULTOS'], errors='coerce').fillna(0)
                     
-                    # --- NORMALIZACIÓN AGRESIVA DE MAESTROS ---
                     col_id_gp = [c for c in m_gp.columns if 'CODIGO' in c.upper()][0]
-                    m_gp_clean = m_gp.copy()
+                    m_gp_clean = m_gp.copy().drop_duplicates(subset=[col_id_gp])
                     m_gp_clean[col_id_gp] = m_gp_clean[col_id_gp].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
-                    m_gp_clean = m_gp_clean.drop_duplicates(subset=[col_id_gp])
                     
                     m_costos_clean = m_costos.copy()
                     m_costos_clean.columns = m_costos_clean.columns.str.strip().str.upper()
                     renames = {c: "P_PREP" for c in m_costos_clean.columns if "PREP" in c}
                     renames.update({c: "P_TRANS" for c in m_costos_clean.columns if "TRANS" in c})
                     renames.update({c: "DESCRIPCIÓN ZONA" for c in m_costos_clean.columns if "ZONA" in c})
-                    m_costos_clean = m_costos_clean.rename(columns=renames)
+                    m_costos_clean = m_costos_clean.rename(columns=renames).drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
                     m_costos_clean['DESCRIPCIÓN ZONA'] = m_costos_clean['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
-                    m_costos_clean = m_costos_clean.drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
                     
-                    # Merge
                     res = pd.merge(df_c, m_gp_clean[[col_id_gp, 'GP', 'TIPO']], left_on='CODIGO', right_on=col_id_gp, how='left')
                     res = pd.merge(res, m_costos_clean[['DESCRIPCIÓN ZONA', 'P_PREP', 'P_TRANS']], on='DESCRIPCIÓN ZONA', how='left')
 
-                    # Validación Bloqueo
+                    # --- BLOQUE DE DETECCIÓN DE ERRORES ---
                     sin_gp = res[res['GP'].isna()]['CODIGO'].unique()
                     sin_tarifa = res[res['P_PREP'].isna()]['DESCRIPCIÓN ZONA'].unique()
 
                     if len(sin_gp) > 0 or len(sin_tarifa) > 0:
-                        st.error("🛑 BLOQUEO: Hay inconsistencias en la base.")
-                        if len(sin_gp) > 0: st.warning(f"Códigos sin GP: {sin_gp}")
-                        if len(sin_tarifa) > 0: st.warning(f"Zonas no encontradas en Maestro Costos: {sin_tarifa}")
-                        st.info("💡 Consejo: Revisa que el nombre de la zona en el Maestro de Costos sea EXACTAMENTE igual al de tu archivo mensual.")
+                        st.error("🛑 BLOQUEO: Se detectaron inconsistencias en la carga.")
+                        col_err1, col_err2 = st.columns(2)
+                        with col_err1:
+                            if len(sin_gp) > 0:
+                                st.warning("⚠️ Códigos faltantes en Maestro GP:")
+                                st.write(sin_gp)
+                        with col_err2:
+                            if len(sin_tarifa) > 0:
+                                st.warning("⚠️ Zonas sin tarifa en Maestro Costos:")
+                                st.write(sin_tarifa)
                     else:
-                        # Cálculos
+                        # Cálculos (Sin tocar nada funcional)
                         res['TOTAL_PREPARACION'] = res['P_PREP'] * res['BULTOS']
                         res['TOTAL_TRANSPORTE'] = res['P_TRANS'] * res['BULTOS']
                         res['SUBTOTAL_NETO'] = res['TOTAL_PREPARACION'] + res['TOTAL_TRANSPORTE']
@@ -157,7 +159,6 @@ elif st.session_state['pagina_actual'] == "sistema":
                         summary_f = pd.concat([summary.reset_index(), pd.DataFrame([{'GP': '--- TOTALES ---', **summary.sum()}])], ignore_index=True)
                         st.table(summary_f.style.format(subset=summary_f.columns[1:], formatter="{:,.2f}"))
                         
-                        # Descarga Excel Resumen
                         out_sum = io.BytesIO()
                         with pd.ExcelWriter(out_sum, engine='openpyxl') as wr:
                             summary_f.to_excel(wr, index=False, sheet_name='Resumen')
@@ -171,11 +172,9 @@ elif st.session_state['pagina_actual'] == "sistema":
                         st.session_state['res_actual'] = res
                         st.session_state['mes_actual'] = mes_sel
 
-    with tabs[1]: # PESTAÑA 2: DETALLE ACTUAL + FILTROS
+    with tabs[1]: # PESTAÑA 2: DETALLE + FILTROS
         if 'res_actual' in st.session_state:
             df_full = st.session_state['res_actual']
-            
-            # FILTROS
             st.markdown("### 🔍 Filtros de Búsqueda")
             f1, f2, f3 = st.columns(3)
             with f1: sel_gp = st.multiselect("Filtrar por GP", options=sorted(df_full['GP'].unique()))
@@ -187,7 +186,6 @@ elif st.session_state['pagina_actual'] == "sistema":
             if sel_tipo: df_v = df_v[df_v['TIPO'].isin(sel_tipo)]
             if sel_zona: df_v = df_v[df_v['DESCRIPCIÓN ZONA'].isin(sel_zona)]
 
-            # KPIs
             k1, k2, k3, k4 = st.columns(4)
             k1.metric("Bultos Filtrados", f"{df_v['BULTOS'].sum():,.0f}")
             k2.metric("Preparación", f"$ {df_v['TOTAL_PREPARACION'].sum():,.2f}")
@@ -195,12 +193,10 @@ elif st.session_state['pagina_actual'] == "sistema":
             k4.metric("Total Final", f"$ {df_v['TOTAL_FINAL'].sum():,.2f}")
             
             st.divider()
-            
             out_det = io.BytesIO()
             with pd.ExcelWriter(out_det, engine='openpyxl') as writer:
                 df_v.to_excel(writer, index=False, sheet_name='Detalle')
             st.download_button("📥 Descargar Detalle Filtrado (Excel)", out_det.getvalue(), f"Detalle_Bago_{st.session_state['mes_actual']}.xlsx")
-            
             st.dataframe(df_v, use_container_width=True)
         else:
             st.info("Sin datos activos.")
