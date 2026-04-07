@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 # 1. CONFIGURACIÓN DE PÁGINA
 st.set_page_config(page_title="Laboratorios Bagó - Conciliación Extra Ciclos", layout="wide", page_icon="🧪")
 
-# --- DISEÑO ESTÉTICO UI/UX PRO (INTACTO) ---
+# --- DISEÑO ESTÉTICO UI/UX PRO ---
 MAGENTA_BAGO = "#C7006A" 
 MAGENTA_OSCURO = "#8A004A"
 
@@ -55,15 +55,10 @@ st.markdown(f"""
 if 'pagina_actual' not in st.session_state:
     st.session_state['pagina_actual'] = "inicio"
 
-hora_ajustada = (datetime.now() - timedelta(hours=5)).hour
-saludo_txt = "☀️ Buenos días" if 5 <= hora_ajustada < 12 else "🌤️ Buenas tardes" if 12 <= hora_ajustada < 19 else "🌙 Buenas noches"
-
-# ---------------------------------------------------------
 # PANTALLA 1: INICIO
-# ---------------------------------------------------------
 if st.session_state['pagina_actual'] == "inicio":
     st.markdown("<br><br>", unsafe_allow_html=True)
-    st.markdown(f'<p class="welcome-text">{saludo_txt},</p>', unsafe_allow_html=True)
+    st.markdown('<p class="welcome-text">Bienvenido,</p>', unsafe_allow_html=True)
     st.markdown('<p class="main-title">Laboratorios Bagó</p>', unsafe_allow_html=True)
     st.markdown("<h3 style='text-align:center; color:#555; font-weight:300; margin-bottom:60px;'>SISTEMA DE CONCILIACION DE EXTRA CICLOS </h3>", unsafe_allow_html=True)
     
@@ -76,9 +71,7 @@ if st.session_state['pagina_actual'] == "inicio":
         if st.button("\n REPROGRAMA"):
             st.toast("Módulo en desarrollo...", icon="⚠️")
 
-# ---------------------------------------------------------
-# PANTALLA 2: SISTEMA PRINCIPAL
-# ---------------------------------------------------------
+# PANTALLA 2: SISTEMA
 elif st.session_state['pagina_actual'] == "sistema":
     if st.sidebar.button("⬅️ Volver al Menú Principal"):
         st.session_state['pagina_actual'] = "inicio"
@@ -87,6 +80,11 @@ elif st.session_state['pagina_actual'] == "sistema":
     PATH_GP = "master_gp.csv"
     PATH_COSTOS = "master_costos.csv"
     HISTORICO_FILE = "base_historica_bago.csv"
+
+    def limpiar_texto(df, columna):
+        if columna in df.columns:
+            return df[columna].astype(str).str.strip().str.upper().str.replace(r'\.0$', '', regex=True)
+        return None
 
     def cargar_maestro(path): return pd.read_csv(path) if os.path.exists(path) else None
     def leer_archivo(archivo):
@@ -101,7 +99,7 @@ elif st.session_state['pagina_actual'] == "sistema":
     m_gp = cargar_maestro(PATH_GP)
     m_costos = cargar_maestro(PATH_COSTOS)
 
-    with tabs[0]: # LIQUIDACIÓN
+    with tabs[0]: 
         if m_gp is None or m_costos is None: 
             st.warning("⚠️ Cargue los maestros en la pestaña Configurar.")
         else:
@@ -112,27 +110,29 @@ elif st.session_state['pagina_actual'] == "sistema":
             if archivo:
                 df_raw = leer_archivo(archivo)
                 if df_raw is not None:
-                    # 1. LIMPIEZA Y CONSOLIDACIÓN DE CARGA
+                    # 1. LIMPIEZA PROFUNDA DE CARGA
                     df_raw.columns = df_raw.columns.str.strip().str.upper()
-                    df_raw['CODIGO'] = df_raw['CODIGO'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip().str.upper()
-                    df_raw['DESCRIPCIÓN ZONA'] = df_raw['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
+                    df_raw['CODIGO'] = limpiar_texto(df_raw, 'CODIGO')
+                    df_raw['DESCRIPCIÓN ZONA'] = limpiar_texto(df_raw, 'DESCRIPCIÓN ZONA')
                     df_raw['BULTOS'] = pd.to_numeric(df_raw['BULTOS'], errors='coerce').fillna(0)
                     df_c = df_raw.groupby(['CODIGO', 'DESCRIPCIÓN ZONA'], as_index=False)['BULTOS'].sum()
                     
-                    # 2. LIMPIEZA DE MAESTROS
+                    # 2. LIMPIEZA PROFUNDA MAESTROS
                     col_id_gp = [c for c in m_gp.columns if 'CODIGO' in c.upper()][0]
-                    m_gp_clean = m_gp.copy().drop_duplicates(subset=[col_id_gp])
-                    m_gp_clean[col_id_gp] = m_gp_clean[col_id_gp].astype(str).str.replace(r'\.0$', '', regex=True).str.strip().str.upper()
+                    m_gp_clean = m_gp.copy()
+                    m_gp_clean[col_id_gp] = limpiar_texto(m_gp_clean, col_id_gp)
+                    m_gp_clean = m_gp_clean.drop_duplicates(subset=[col_id_gp])
                     
                     m_costos_clean = m_costos.copy()
                     m_costos_clean.columns = m_costos_clean.columns.str.strip().str.upper()
+                    m_costos_clean['DESCRIPCIÓN ZONA'] = limpiar_texto(m_costos_clean, 'DESCRIPCIÓN ZONA')
+                    
+                    # Renombrar precios
                     ren = {c: "P_PREP" for c in m_costos_clean.columns if "PREP" in c}
                     ren.update({c: "P_TRANS" for c in m_costos_clean.columns if "TRANS" in c})
-                    ren.update({c: "DESCRIPCIÓN ZONA" for c in m_costos_clean.columns if "ZONA" in c})
                     m_costos_clean = m_costos_clean.rename(columns=ren).drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
-                    m_costos_clean['DESCRIPCIÓN ZONA'] = m_costos_clean['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
                     
-                    # 3. MAPEADO DIRECTO (ANTI-DUPLICADOS)
+                    # 3. MAPEADO DIRECTO POR DICCIONARIO (Cero Duplicados)
                     dict_gp = m_gp_clean.set_index(col_id_gp)['GP'].to_dict()
                     dict_tipo = m_gp_clean.set_index(col_id_gp)['TIPO'].to_dict()
                     dict_prep = m_costos_clean.set_index('DESCRIPCIÓN ZONA')['P_PREP'].to_dict()
@@ -144,17 +144,18 @@ elif st.session_state['pagina_actual'] == "sistema":
                     res['P_PREP'] = res['DESCRIPCIÓN ZONA'].map(dict_prep)
                     res['P_TRANS'] = res['DESCRIPCIÓN ZONA'].map(dict_trans)
 
-                    # 4. VALIDACIÓN DE ERRORES (RESTAURADA)
+                    # 4. VALIDACIÓN DE ERRORES (RESTAURADA Y MEJORADA)
                     sin_gp = res[res['GP'].isna()]['CODIGO'].unique()
                     sin_tar = res[res['P_PREP'].isna()]['DESCRIPCIÓN ZONA'].unique()
 
                     if len(sin_gp) > 0 or len(sin_tar) > 0:
-                        st.error("🛑 BLOQUEO DE SEGURIDAD: Faltan datos en los maestros.")
+                        st.error("🛑 BLOQUEO: Hay datos en el Excel que no existen en tus Maestros.")
                         col1, col2 = st.columns(2)
                         with col1:
                             if len(sin_gp) > 0: st.warning(f"❌ Códigos sin GP: {list(sin_gp)}")
                         with col2:
                             if len(sin_tar) > 0: st.warning(f"❌ Zonas sin Tarifa: {list(sin_tar)}")
+                        st.info("💡 Consejo: Revisa que no haya espacios extras en los nombres de las zonas en tu Excel.")
                     else:
                         # 5. CÁLCULOS
                         res['TOTAL_PREPARACION'] = res['P_PREP'] * res['BULTOS']
@@ -175,24 +176,23 @@ elif st.session_state['pagina_actual'] == "sistema":
                         summary_f = pd.concat([summary.reset_index(), pd.DataFrame([{'GP': '--- TOTALES ---', **summary.sum()}])], ignore_index=True)
                         st.table(summary_f.style.format(subset=summary_f.columns[1:], formatter="{:,.2f}"))
                         
-                        # GUARDADO HISTÓRICO (CORREGIDO)
                         if st.button("💾 Guardar en Historial"):
                             res['MES_PROCESO'] = mes_sel
                             header_condition = not os.path.exists(HISTORICO_FILE)
                             res.to_csv(HISTORICO_FILE, mode='a', index=False, header=header_condition)
-                            st.success(f"¡Datos de {mes_sel} añadidos al historial con éxito!")
+                            st.success(f"¡Datos de {mes_sel} añadidos al historial!")
 
                         st.session_state['res_actual'] = res
                         st.session_state['mes_actual'] = mes_sel
 
-    with tabs[1]: # DETALLE ACTUAL (KPIs)
+    with tabs[1]: # DETALLE (KPIs)
         if 'res_actual' in st.session_state:
             df_full = st.session_state['res_actual']
             st.markdown("### 🔍 Filtros")
             f1, f2, f3 = st.columns(3)
-            with f1: sel_gp = st.multiselect("Filtrar por GP", options=sorted(df_full['GP'].unique()))
-            with f2: sel_tipo = st.multiselect("Filtrar por Tipo", options=sorted(df_full['TIPO'].unique()))
-            with f3: sel_zona = st.multiselect("Filtrar por Zona", options=sorted(df_full['DESCRIPCIÓN ZONA'].unique()))
+            with f1: sel_gp = st.multiselect("Filtrar GP", options=sorted(df_full['GP'].unique()))
+            with f2: sel_tipo = st.multiselect("Filtrar Tipo", options=sorted(df_full['TIPO'].unique()))
+            with f3: sel_zona = st.multiselect("Filtrar Zona", options=sorted(df_full['DESCRIPCIÓN ZONA'].unique()))
 
             df_v = df_full.copy()
             if sel_gp: df_v = df_v[df_v['GP'].isin(sel_gp)]
@@ -200,7 +200,7 @@ elif st.session_state['pagina_actual'] == "sistema":
             if sel_zona: df_v = df_v[df_v['DESCRIPCIÓN ZONA'].isin(sel_zona)]
 
             k1, k2, k3, k4 = st.columns(4)
-            k1.metric("Bultos Filtrados", f"{df_v['BULTOS'].sum():,.0f}")
+            k1.metric("Bultos", f"{df_v['BULTOS'].sum():,.0f}")
             k2.metric("Preparación", f"$ {df_v['TOTAL_PREPARACION'].sum():,.2f}")
             k3.metric("Transporte", f"$ {df_v['TOTAL_TRANSPORTE'].sum():,.2f}")
             k4.metric("Total Final", f"$ {df_v['TOTAL_FINAL'].sum():,.2f}")
