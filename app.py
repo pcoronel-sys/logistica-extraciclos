@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 # 1. CONFIGURACIÓN DE PÁGINA
 st.set_page_config(page_title="Laboratorios Bagó - Conciliación Extra Ciclos", layout="wide", page_icon="🧪")
 
-# --- DISEÑO ESTÉTICO UI/UX PRO ---
+# --- DISEÑO ESTÉTICO UI/UX PRO (INTACTO) ---
 MAGENTA_BAGO = "#C7006A" 
 MAGENTA_OSCURO = "#8A004A"
 
@@ -55,11 +55,10 @@ st.markdown(f"""
 if 'pagina_actual' not in st.session_state:
     st.session_state['pagina_actual'] = "inicio"
 
-# FUNCIONES DE LIMPIEZA
 def clean_val(val):
     return str(val).strip().upper().replace(".0", "")
 
-# PANTALLA 1: INICIO
+# --- INICIO ---
 if st.session_state['pagina_actual'] == "inicio":
     st.markdown("<br><br>", unsafe_allow_html=True)
     st.markdown('<p class="welcome-text">Bienvenido,</p>', unsafe_allow_html=True)
@@ -75,7 +74,7 @@ if st.session_state['pagina_actual'] == "inicio":
         if st.button("\n REPROGRAMA"):
             st.toast("Módulo en desarrollo...", icon="⚠️")
 
-# PANTALLA 2: SISTEMA
+# --- SISTEMA ---
 elif st.session_state['pagina_actual'] == "sistema":
     if st.sidebar.button("⬅️ Volver al Menú Principal"):
         st.session_state['pagina_actual'] = "inicio"
@@ -85,14 +84,14 @@ elif st.session_state['pagina_actual'] == "sistema":
     PATH_COSTOS = "master_costos.csv"
     HISTORICO_FILE = "base_historica_bago.csv"
 
-    m_gp = pd.read_csv(PATH_GP) if os.path.exists(PATH_GP) else None
-    m_costos = pd.read_csv(PATH_COSTOS) if os.path.exists(PATH_COSTOS) else None
-
     st.title("📊 Control de Liquidación Logística")
     tabs = st.tabs(["🚀 Liquidación Mensual", "🔍 Detalle Actual", "⚙️ Configurar Maestros", "🗄️ Historial"])
 
-    with tabs[0]: # LIQUIDACIÓN
-        if m_gp is None or m_costos is None: 
+    m_gp_raw = pd.read_csv(PATH_GP) if os.path.exists(PATH_GP) else None
+    m_costos_raw = pd.read_csv(PATH_COSTOS) if os.path.exists(PATH_COSTOS) else None
+
+    with tabs[0]: 
+        if m_gp_raw is None or m_costos_raw is None: 
             st.warning("⚠️ Cargue los maestros en la pestaña Configurar.")
         else:
             c1, c2 = st.columns([1, 2])
@@ -100,71 +99,75 @@ elif st.session_state['pagina_actual'] == "sistema":
             with c2: archivo = st.file_uploader("Subir Carga Mensual", type=['xlsx', 'xls', 'csv'])
 
             if archivo:
-                df_raw = pd.read_excel(archivo) if archivo.name.endswith(('.xlsx', '.xls')) else pd.read_csv(archivo, encoding='latin-1')
-                if df_raw is not None:
-                    # 1. LIMPIEZA CARGA
-                    df_raw.columns = df_raw.columns.str.strip().str.upper()
-                    df_raw['CODIGO'] = df_raw['CODIGO'].apply(clean_val)
-                    df_raw['DESCRIPCIÓN ZONA'] = df_raw['DESCRIPCIÓN ZONA'].apply(clean_val)
-                    df_raw['BULTOS'] = pd.to_numeric(df_raw['BULTOS'], errors='coerce').fillna(0)
-                    df_c = df_raw.groupby(['CODIGO', 'DESCRIPCIÓN ZONA'], as_index=False)['BULTOS'].sum()
+                df_c_raw = pd.read_excel(archivo) if archivo.name.endswith(('.xlsx', '.xls')) else pd.read_csv(archivo, encoding='latin-1')
+                if df_c_raw is not None:
+                    # 1. Limpieza de Carga
+                    df_c_raw.columns = df_c_raw.columns.str.strip().str.upper()
+                    df_c_raw['CODIGO'] = df_c_raw['CODIGO'].apply(clean_val)
+                    df_c_raw['DESCRIPCIÓN ZONA'] = df_c_raw['DESCRIPCIÓN ZONA'].apply(clean_val)
+                    df_c_raw['BULTOS'] = pd.to_numeric(df_c_raw['BULTOS'], errors='coerce').fillna(0)
+                    df_c = df_c_raw.groupby(['CODIGO', 'DESCRIPCIÓN ZONA'], as_index=False)['BULTOS'].sum()
 
-                    # 2. LIMPIEZA MAESTROS
-                    # GP
-                    m_gp.columns = m_gp.columns.str.strip().str.upper()
-                    col_id = [c for c in m_gp.columns if 'CODIGO' in c][0]
-                    m_gp[col_id] = m_gp[col_id].apply(clean_val)
-                    dict_gp = m_gp.drop_duplicates(col_id).set_index(col_id)['GP'].to_dict()
-                    dict_tipo = m_gp.drop_duplicates(col_id).set_index(col_id)['TIPO'].to_dict()
+                    # 2. Diccionarios de Maestros (Cero Duplicados)
+                    m_gp_raw.columns = m_gp_raw.columns.str.strip().str.upper()
+                    col_id_gp = [c for c in m_gp_raw.columns if 'CODIGO' in c][0]
+                    m_gp_raw[col_id_gp] = m_gp_raw[col_id_gp].apply(clean_val)
+                    dict_gp = m_gp_raw.drop_duplicates(col_id_gp).set_index(col_id_gp)['GP'].to_dict()
+                    dict_tipo = m_gp_raw.drop_duplicates(col_id_gp).set_index(col_id_gp)['TIPO'].to_dict()
 
-                    # Costos
-                    m_costos.columns = m_costos.columns.str.strip().str.upper()
-                    m_costos['DESCRIPCIÓN ZONA'] = m_costos['DESCRIPCIÓN ZONA'].apply(clean_val)
-                    ren = {c: "P_PREP" for c in m_costos.columns if "PREP" in c}
-                    ren.update({c: "P_TRANS" for c in m_costos.columns if "TRANS" in c})
-                    m_costos_ren = m_costos.rename(columns=ren).drop_duplicates('DESCRIPCIÓN ZONA')
+                    m_costos_raw.columns = m_costos_raw.columns.str.strip().str.upper()
+                    m_costos_raw['DESCRIPCIÓN ZONA'] = m_costos_raw['DESCRIPCIÓN ZONA'].apply(clean_val)
+                    ren = {c: "P_PREP" for c in m_costos_raw.columns if "PREP" in c}
+                    ren.update({c: "P_TRANS" for c in m_costos_raw.columns if "TRANS" in c})
+                    m_costos_ren = m_costos_raw.rename(columns=ren).drop_duplicates('DESCRIPCIÓN ZONA')
                     dict_prep = m_costos_ren.set_index('DESCRIPCIÓN ZONA')['P_PREP'].to_dict()
                     dict_trans = m_costos_ren.set_index('DESCRIPCIÓN ZONA')['P_TRANS'].to_dict()
 
-                    # 3. MAPEADO (Anti-Duplicados)
+                    # 3. Cruce
                     res = df_c.copy()
                     res['GP'] = res['CODIGO'].map(dict_gp)
                     res['TIPO'] = res['CODIGO'].map(dict_tipo)
                     res['P_PREP'] = res['DESCRIPCIÓN ZONA'].map(dict_prep)
                     res['P_TRANS'] = res['DESCRIPCIÓN ZONA'].map(dict_trans)
 
-                    # 4. VALIDACIÓN AL INICIO
-                    faltan_gp = res[res['GP'].isna()]['CODIGO'].unique()
-                    faltan_costo = res[res['P_PREP'].isna()]['DESCRIPCIÓN ZONA'].unique()
+                    # 4. Validación DETALLADA
+                    sin_gp = res[res['GP'].isna()]['CODIGO'].unique()
+                    sin_costo = res[res['P_PREP'].isna()]['DESCRIPCIÓN ZONA'].unique()
 
-                    if len(faltan_gp) > 0 or len(faltan_costo) > 0:
-                        st.error("🛑 BLOQUEO: Hay datos en el Excel que NO existen en los Maestros.")
-                        if len(faltan_gp) > 0: st.warning(f"❌ Códigos sin GP: {list(faltan_gp)}")
-                        if len(faltan_costo) > 0: st.warning(f"❌ Zonas sin Precio: {list(faltan_costo)}")
+                    if len(sin_gp) > 0 or len(sin_costo) > 0:
+                        st.error("🛑 BLOQUEO: Faltan registros en los Maestros.")
+                        if len(sin_gp) > 0: st.warning(f"❌ Códigos sin GP: {list(sin_gp)}")
+                        if len(sin_costo) > 0: st.warning(f"❌ Zonas sin Tarifa: {list(sin_costo)}")
                     else:
+                        # Cálculos con SUBTOTALES E IVA
                         res['TOTAL_PREPARACION'] = res['P_PREP'] * res['BULTOS']
                         res['TOTAL_TRANSPORTE'] = res['P_TRANS'] * res['BULTOS']
-                        res['SUBTOTAL'] = res['TOTAL_PREPARACION'] + res['TOTAL_TRANSPORTE']
-                        res['IVA'] = res['SUBTOTAL'] * 0.15
-                        res['TOTAL_FINAL'] = res['SUBTOTAL'] + res['IVA']
+                        res['SUBTOTAL_NETO'] = res['TOTAL_PREPARACION'] + res['TOTAL_TRANSPORTE']
+                        res['IVA_15'] = res['SUBTOTAL_NETO'] * 0.15
+                        res['TOTAL_FINAL'] = res['SUBTOTAL_NETO'] + res['IVA_15']
 
-                        st.subheader(f"📋 Resumen: {mes_sel}")
-                        summary = res.pivot_table(index='GP', columns='TIPO', values='SUBTOTAL', aggfunc='sum').fillna(0)
+                        st.subheader(f"📋 Resumen Consolidado: {mes_sel}")
+                        summary = res.pivot_table(index='GP', columns='TIPO', values='SUBTOTAL_NETO', aggfunc='sum').fillna(0)
                         for col in ['MM', 'MP']: 
                             if col not in summary.columns: summary[col] = 0.0
-                        summary['TOTAL'] = summary['MM'] + summary['MP']
-                        st.table(summary.style.format("{:,.2f}"))
+                        
+                        summary['SUBTOTAL'] = summary['MM'] + summary['MP']
+                        summary['IVA 15%'] = summary['SUBTOTAL'] * 0.15
+                        summary['TOTAL FINAL'] = summary['SUBTOTAL'] + summary['IVA 15%']
+                        
+                        summary_f = pd.concat([summary.reset_index(), pd.DataFrame([{'GP': '--- TOTALES ---', **summary.sum()}])], ignore_index=True)
+                        st.table(summary_f.style.format(subset=summary_f.columns[1:], formatter="{:,.2f}"))
 
                         if st.button("💾 Guardar en Historial"):
                             res['MES_PROCESO'] = mes_sel
                             existe = os.path.exists(HISTORICO_FILE)
                             res.to_csv(HISTORICO_FILE, mode='a', index=False, header=not existe)
-                            st.success(f"Guardado {mes_sel}")
+                            st.success(f"Guardado acumulado: {mes_sel}")
 
                         st.session_state['res_actual'] = res
                         st.session_state['mes_actual'] = mes_sel
 
-    with tabs[1]: # DETALLE (KPIs)
+    with tabs[1]: # DETALLE (KPIs RESTAURADOS)
         if 'res_actual' in st.session_state:
             df_v = st.session_state['res_actual']
             k1, k2, k3, k4 = st.columns(4)
