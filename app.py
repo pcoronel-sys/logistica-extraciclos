@@ -63,7 +63,7 @@ if 'pagina_actual' not in st.session_state:
     st.session_state['pagina_actual'] = "inicio"
 
 hora_ajustada = (datetime.now() - timedelta(hours=5)).hour
-saludo_txt = "☀️ Buenos días" if 5 <= hora_ajustada < 12 else "🌤️ Buenas tardes" if 12 <= hora_ajustada < 19 else "🌙 Buenas noches"
+saludo_txt = "☀️ Buenos días" if 5 <= hora_ajustada < 12 else "🌤️ Buenas tardes" if 12 <= hora_ajustada < 19 else "🌙 Buenos noches"
 
 # ---------------------------------------------------------
 # PANTALLA 1: INICIO
@@ -108,7 +108,7 @@ elif st.session_state['pagina_actual'] == "sistema":
     m_gp = cargar_maestro(PATH_GP)
     m_costos = cargar_maestro(PATH_COSTOS)
 
-    with tabs[0]: # LIQUIDACIÓN
+    with tabs[0]: # PESTAÑA 1: LIQUIDACIÓN
         if m_gp is None or m_costos is None: 
             st.warning("⚠️ Cargue los maestros en la pestaña Configurar.")
         else:
@@ -119,15 +119,14 @@ elif st.session_state['pagina_actual'] == "sistema":
             if archivo:
                 df_raw = leer_archivo(archivo)
                 if df_raw is not None:
-                    # 1. CONSOLIDACIÓN DE CARGA (Suma bultos por código/zona)
+                    # 1. LIMPIEZA DE CARGA
                     df_raw.columns = df_raw.columns.str.strip().str.upper()
                     df_raw['CODIGO'] = df_raw['CODIGO'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                     df_raw['DESCRIPCIÓN ZONA'] = df_raw['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
                     df_raw['BULTOS'] = pd.to_numeric(df_raw['BULTOS'], errors='coerce').fillna(0)
-                    
                     df_c = df_raw.groupby(['CODIGO', 'DESCRIPCIÓN ZONA'], as_index=False)['BULTOS'].sum()
                     
-                    # 2. LIMPIEZA DE MAESTROS (Fuerza registros únicos)
+                    # 2. LIMPIEZA DE MAESTROS
                     col_id_gp = [c for c in m_gp.columns if 'CODIGO' in c.upper()][0]
                     m_gp_clean = m_gp.copy().drop_duplicates(subset=[col_id_gp])
                     m_gp_clean[col_id_gp] = m_gp_clean[col_id_gp].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
@@ -140,8 +139,7 @@ elif st.session_state['pagina_actual'] == "sistema":
                     m_costos_clean = m_costos_clean.rename(columns=ren).drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
                     m_costos_clean['DESCRIPCIÓN ZONA'] = m_costos_clean['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
                     
-                    # 3. CRUCE BLINDADO (Sin merge masivo para evitar duplicaciones)
-                    # Usamos diccionarios para mapear valores 1 a 1
+                    # 3. MAPEADO DIRECTO (ANTI-DUPLICADOS)
                     dict_gp = m_gp_clean.set_index(col_id_gp)['GP'].to_dict()
                     dict_tipo = m_gp_clean.set_index(col_id_gp)['TIPO'].to_dict()
                     dict_prep = m_costos_clean.set_index('DESCRIPCIÓN ZONA')['P_PREP'].to_dict()
@@ -153,14 +151,19 @@ elif st.session_state['pagina_actual'] == "sistema":
                     res['P_PREP'] = res['DESCRIPCIÓN ZONA'].map(dict_prep)
                     res['P_TRANS'] = res['DESCRIPCIÓN ZONA'].map(dict_trans)
 
-                    # 4. VALIDACIÓN
-                    sin_datos = res[res['GP'].isna() | res['P_PREP'].isna()]
+                    # 4. VALIDACIÓN DE CÓDIGOS Y ZONAS (RESTAURADA)
+                    sin_gp = res[res['GP'].isna()]['CODIGO'].unique()
+                    sin_tar = res[res['P_PREP'].isna()]['DESCRIPCIÓN ZONA'].unique()
 
-                    if not sin_datos.empty:
+                    if len(sin_gp) > 0 or len(sin_tar) > 0:
                         st.error("🛑 BLOQUEO: Faltan registros en los maestros.")
-                        st.write("Revise códigos o zonas faltantes en la pestaña de Alertas.")
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            if len(sin_gp) > 0: st.warning(f"Códigos no encontrados en GP: {list(sin_gp)}")
+                        with col2:
+                            if len(sin_tar) > 0: st.warning(f"Zonas sin tarifa: {list(sin_tar)}")
                     else:
-                        # Cálculos
+                        # 5. CÁLCULOS
                         res['TOTAL_PREPARACION'] = res['P_PREP'] * res['BULTOS']
                         res['TOTAL_TRANSPORTE'] = res['P_TRANS'] * res['BULTOS']
                         res['SUBTOTAL_NETO'] = res['TOTAL_PREPARACION'] + res['TOTAL_TRANSPORTE']
@@ -181,13 +184,14 @@ elif st.session_state['pagina_actual'] == "sistema":
                         
                         if st.button("💾 Guardar en Historial"):
                             res['MES_PROCESO'] = mes_sel
-                            res.to_csv(HISTORICO_FILE, mode='a', index=False, header=not os.path.exists(HISTORICO_FILE))
-                            st.success(f"Guardado {mes_sel}")
+                            header = not os.path.exists(HISTORICO_FILE)
+                            res.to_csv(HISTORICO_FILE, mode='a', index=False, header=header)
+                            st.success(f"¡Datos de {mes_sel} guardados con éxito!")
 
                         st.session_state['res_actual'] = res
                         st.session_state['mes_actual'] = mes_sel
 
-    with tabs[1]: # DETALLE ACTUAL (KPIs Restaurados)
+    with tabs[1]: # PESTAÑA 2: DETALLE ACTUAL (KPIs RESTAURADOS)
         if 'res_actual' in st.session_state:
             df_full = st.session_state['res_actual']
             st.markdown("### 🔍 Filtros de Búsqueda")
