@@ -24,8 +24,8 @@ st.markdown(f"""
         color: #333 !important; 
         border: 1px solid rgba(200, 200, 200, 0.3) !important; 
         border-radius: 20px !important; 
-        height: 150px !important; 
-        width: 100% !important; 
+        height: 90px !important; 
+        width: 90% !important; 
         box-shadow: 0 20px 40px rgba(0,0,0,0.05) !important; 
         transition: all 0.6s cubic-bezier(0.165, 0.84, 0.44, 1.0) !important; 
         font-size: 1.4rem !important; 
@@ -216,7 +216,7 @@ elif st.session_state['pagina_actual'] == "sistema":
             out_det = io.BytesIO()
             with pd.ExcelWriter(out_det, engine='openpyxl') as writer:
                 df_v.to_excel(writer, index=False, sheet_name='Detalle')
-            st.download_button("📥 Descargar Detalle (Excel)", out_det.getvalue(), f"Detalle_{st.session_state['mes_actual']}.xlsx")
+            st.download_button("📥 Descargar Detalle ", out_det.getvalue(), f"Detalle_{st.session_state['mes_actual']}.xlsx")
             st.dataframe(df_v, use_container_width=True)
 
     with tabs[2]: # CONFIG
