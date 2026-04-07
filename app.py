@@ -103,42 +103,34 @@ elif st.session_state['pagina_actual'] == "sistema":
             if archivo:
                 df_c = leer_archivo(archivo)
                 if df_c is not None:
-                    # --- NORMALIZACIÓN CARGA ---
                     df_c.columns = df_c.columns.str.strip().str.upper()
                     df_c['CODIGO'] = df_c['CODIGO'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                     df_c['DESCRIPCIÓN ZONA'] = df_c['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
                     df_c['BULTOS'] = pd.to_numeric(df_c['BULTOS'], errors='coerce').fillna(0)
                     
-                    # --- LIMPIEZA MAESTRO GP (ANTI-DUPLICADOS) ---
                     col_id_gp = [c for c in m_gp.columns if 'CODIGO' in c.upper()][0]
-                    m_gp_clean = m_gp.copy()
+                    m_gp_clean = m_gp.copy().drop_duplicates(subset=[col_id_gp])
                     m_gp_clean[col_id_gp] = m_gp_clean[col_id_gp].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
-                    m_gp_clean = m_gp_clean.drop_duplicates(subset=[col_id_gp]) # ELIMINA CUALQUER CÓDIGO REPETIDO
                     
-                    # --- LIMPIEZA MAESTRO COSTOS (ANTI-DUPLICADOS) ---
                     m_costos_clean = m_costos.copy()
                     m_costos_clean.columns = m_costos_clean.columns.str.strip().str.upper()
                     renames = {c: "P_PREP" for c in m_costos_clean.columns if "PREP" in c}
                     renames.update({c: "P_TRANS" for c in m_costos_clean.columns if "TRANS" in c})
                     renames.update({c: "DESCRIPCIÓN ZONA" for c in m_costos_clean.columns if "ZONA" in c})
-                    m_costos_clean = m_costos_clean.rename(columns=renames)
+                    m_costos_clean = m_costos_clean.rename(columns=renames).drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
                     m_costos_clean['DESCRIPCIÓN ZONA'] = m_costos_clean['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
-                    m_costos_clean = m_costos_clean.drop_duplicates(subset=['DESCRIPCIÓN ZONA']) # ELIMINA ZONAS REPETIDAS
                     
-                    # Cruce seguro
                     res = pd.merge(df_c, m_gp_clean[[col_id_gp, 'GP', 'TIPO']], left_on='CODIGO', right_on=col_id_gp, how='left')
                     res = pd.merge(res, m_costos_clean[['DESCRIPCIÓN ZONA', 'P_PREP', 'P_TRANS']], on='DESCRIPCIÓN ZONA', how='left')
 
-                    # Validación
                     sin_gp = res[res['GP'].isna()]['CODIGO'].unique()
                     sin_tarifa = res[res['P_PREP'].isna()]['DESCRIPCIÓN ZONA'].unique()
 
                     if len(sin_gp) > 0 or len(sin_tarifa) > 0:
-                        st.error("🛑 BLOQUEO: Se detectaron inconsistencias.")
-                        if len(sin_gp) > 0: st.warning(f"Códigos faltantes en Maestro GP: {sin_gp}")
-                        if len(sin_tarifa) > 0: st.warning(f"Zonas sin tarifa: {sin_tarifa}")
+                        st.error("🛑 BLOQUEO: Hay inconsistencias.")
+                        if len(sin_gp) > 0: st.warning(f"Códigos sin GP: {sin_gp}")
+                        if len(sin_tarifa) > 0: st.warning(f"Zonas sin Tarifa: {sin_tarifa}")
                     else:
-                        # Cálculos funcionales
                         res['TOTAL_PREPARACION'] = res['P_PREP'] * res['BULTOS']
                         res['TOTAL_TRANSPORTE'] = res['P_TRANS'] * res['BULTOS']
                         res['SUBTOTAL_NETO'] = res['TOTAL_PREPARACION'] + res['TOTAL_TRANSPORTE']
@@ -153,7 +145,6 @@ elif st.session_state['pagina_actual'] == "sistema":
                         summary['SUBTOTAL'] = summary['MM'] + summary['MP']
                         summary['IVA 15%'] = summary['SUBTOTAL'] * 0.15
                         summary['TOTAL GENERAL'] = summary['SUBTOTAL'] + summary['IVA 15%']
-                        
                         summary_f = pd.concat([summary.reset_index(), pd.DataFrame([{'GP': '--- TOTALES ---', **summary.sum()}])], ignore_index=True)
                         st.table(summary_f.style.format(subset=summary_f.columns[1:], formatter="{:,.2f}"))
                         
@@ -170,7 +161,7 @@ elif st.session_state['pagina_actual'] == "sistema":
                         st.session_state['res_actual'] = res
                         st.session_state['mes_actual'] = mes_sel
 
-    with tabs[1]: # DETALLE + FILTROS (INTACTOS)
+    with tabs[1]: # DETALLE ACTUAL
         if 'res_actual' in st.session_state:
             df_full = st.session_state['res_actual']
             st.markdown("### 🔍 Filtros de Búsqueda")
@@ -203,11 +194,11 @@ elif st.session_state['pagina_actual'] == "sistema":
         st.header("⚙️ Maestros")
         ca, cb = st.columns(2)
         with ca:
-            ug = st.file_uploader("Cargar Maestro GP", type=['csv','xlsx'])
+            ug = st.file_uploader("GP", type=['csv','xlsx'])
             if ug:
                 d = leer_archivo(ug); d.to_csv(PATH_GP, index=False); st.success("GP OK")
         with cb:
-            uc = st.file_uploader("Cargar Maestro Costos", type=['csv','xlsx'])
+            uc = st.file_uploader("Costos", type=['csv','xlsx'])
             if uc:
                 d = leer_archivo(uc); d.to_csv(PATH_COSTOS, index=False); st.success("Costos OK")
 
@@ -215,5 +206,21 @@ elif st.session_state['pagina_actual'] == "sistema":
         st.header("🗄️ Historial")
         if os.path.exists(HISTORICO_FILE):
             df_h = pd.read_csv(HISTORICO_FILE)
-            m_h = st.selectbox("Mes Historial:", df_h['MES_PROCESO'].unique())
-            st.dataframe(df_h[df_h['MES_PROCESO'] == m_h])
+            opciones_mes = sorted(df_h['MES_PROCESO'].unique())
+            
+            col_sel, col_del = st.columns([3, 1])
+            with col_sel:
+                m_h = st.selectbox("Seleccione Mes para ver:", opciones_mes)
+            
+            # --- BOTÓN PARA BORRAR REGISTRO SELECCIONADO ---
+            with col_del:
+                st.write("##") # Alineación
+                if st.button("🗑️ Borrar Historial Seleccionado"):
+                    df_h = df_h[df_h['MES_PROCESO'] != m_h]
+                    df_h.to_csv(HISTORICO_FILE, index=False)
+                    st.toast(f"Se eliminó el historial de {m_h}")
+                    st.rerun()
+
+            st.dataframe(df_h[df_h['MES_PROCESO'] == m_h], use_container_width=True)
+        else:
+            st.info("No hay datos en el historial.")
