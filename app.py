@@ -108,7 +108,7 @@ elif st.session_state['pagina_actual'] == "sistema":
     m_gp = cargar_maestro(PATH_GP)
     m_costos = cargar_maestro(PATH_COSTOS)
 
-    with tabs[0]: # PESTAÑA 1: LIQUIDACIÓN
+    with tabs[0]: # LIQUIDACIÓN
         if m_gp is None or m_costos is None: 
             st.warning("⚠️ Cargue los maestros en la pestaña Configurar.")
         else:
@@ -119,7 +119,7 @@ elif st.session_state['pagina_actual'] == "sistema":
             if archivo:
                 df_raw = leer_archivo(archivo)
                 if df_raw is not None:
-                    # Limpieza y Consolidación Anti-Duplicados
+                    # 1. CONSOLIDACIÓN DE CARGA (Suma bultos por código/zona)
                     df_raw.columns = df_raw.columns.str.strip().str.upper()
                     df_raw['CODIGO'] = df_raw['CODIGO'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                     df_raw['DESCRIPCIÓN ZONA'] = df_raw['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
@@ -127,12 +127,11 @@ elif st.session_state['pagina_actual'] == "sistema":
                     
                     df_c = df_raw.groupby(['CODIGO', 'DESCRIPCIÓN ZONA'], as_index=False)['BULTOS'].sum()
                     
-                    # Limpieza Maestro GP
+                    # 2. LIMPIEZA DE MAESTROS (Fuerza registros únicos)
                     col_id_gp = [c for c in m_gp.columns if 'CODIGO' in c.upper()][0]
                     m_gp_clean = m_gp.copy().drop_duplicates(subset=[col_id_gp])
                     m_gp_clean[col_id_gp] = m_gp_clean[col_id_gp].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                     
-                    # Limpieza Maestro Costos
                     m_costos_clean = m_costos.copy()
                     m_costos_clean.columns = m_costos_clean.columns.str.strip().str.upper()
                     ren = {c: "P_PREP" for c in m_costos_clean.columns if "PREP" in c}
@@ -141,22 +140,27 @@ elif st.session_state['pagina_actual'] == "sistema":
                     m_costos_clean = m_costos_clean.rename(columns=ren).drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
                     m_costos_clean['DESCRIPCIÓN ZONA'] = m_costos_clean['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
                     
-                    # Cruce
-                    res = pd.merge(df_c, m_gp_clean[[col_id_gp, 'GP', 'TIPO']], left_on='CODIGO', right_on=col_id_gp, how='left')
-                    res = pd.merge(res, m_costos_clean[['DESCRIPCIÓN ZONA', 'P_PREP', 'P_TRANS']], on='DESCRIPCIÓN ZONA', how='left')
+                    # 3. CRUCE BLINDADO (Sin merge masivo para evitar duplicaciones)
+                    # Usamos diccionarios para mapear valores 1 a 1
+                    dict_gp = m_gp_clean.set_index(col_id_gp)['GP'].to_dict()
+                    dict_tipo = m_gp_clean.set_index(col_id_gp)['TIPO'].to_dict()
+                    dict_prep = m_costos_clean.set_index('DESCRIPCIÓN ZONA')['P_PREP'].to_dict()
+                    dict_trans = m_costos_clean.set_index('DESCRIPCIÓN ZONA')['P_TRANS'].to_dict()
 
-                    # Panel Alertas
-                    sin_gp = res[res['GP'].isna()]['CODIGO'].unique()
-                    sin_tar = res[res['P_PREP'].isna()]['DESCRIPCIÓN ZONA'].unique()
+                    res = df_c.copy()
+                    res['GP'] = res['CODIGO'].map(dict_gp)
+                    res['TIPO'] = res['CODIGO'].map(dict_tipo)
+                    res['P_PREP'] = res['DESCRIPCIÓN ZONA'].map(dict_prep)
+                    res['P_TRANS'] = res['DESCRIPCIÓN ZONA'].map(dict_trans)
 
-                    if len(sin_gp) > 0 or len(sin_tar) > 0:
-                        st.error("🛑 BLOQUEO: Faltan datos en Maestros.")
-                        ce1, ce2 = st.columns(2)
-                        with ce1: 
-                            if len(sin_gp) > 0: st.warning(f"Códigos sin GP: {sin_gp}")
-                        with ce2: 
-                            if len(sin_tar) > 0: st.warning(f"Zonas sin Tarifa: {sin_tar}")
+                    # 4. VALIDACIÓN
+                    sin_datos = res[res['GP'].isna() | res['P_PREP'].isna()]
+
+                    if not sin_datos.empty:
+                        st.error("🛑 BLOQUEO: Faltan registros en los maestros.")
+                        st.write("Revise códigos o zonas faltantes en la pestaña de Alertas.")
                     else:
+                        # Cálculos
                         res['TOTAL_PREPARACION'] = res['P_PREP'] * res['BULTOS']
                         res['TOTAL_TRANSPORTE'] = res['P_TRANS'] * res['BULTOS']
                         res['SUBTOTAL_NETO'] = res['TOTAL_PREPARACION'] + res['TOTAL_TRANSPORTE']
@@ -178,12 +182,12 @@ elif st.session_state['pagina_actual'] == "sistema":
                         if st.button("💾 Guardar en Historial"):
                             res['MES_PROCESO'] = mes_sel
                             res.to_csv(HISTORICO_FILE, mode='a', index=False, header=not os.path.exists(HISTORICO_FILE))
-                            st.success(f"Guardado mes {mes_sel}")
+                            st.success(f"Guardado {mes_sel}")
 
                         st.session_state['res_actual'] = res
                         st.session_state['mes_actual'] = mes_sel
 
-    with tabs[1]: # PESTAÑA 2: DETALLE Y FILTROS (RESTAURADOS)
+    with tabs[1]: # DETALLE ACTUAL (KPIs Restaurados)
         if 'res_actual' in st.session_state:
             df_full = st.session_state['res_actual']
             st.markdown("### 🔍 Filtros de Búsqueda")
@@ -197,7 +201,6 @@ elif st.session_state['pagina_actual'] == "sistema":
             if sel_tipo: df_v = df_v[df_v['TIPO'].isin(sel_tipo)]
             if sel_zona: df_v = df_v[df_v['DESCRIPCIÓN ZONA'].isin(sel_zona)]
 
-            # KPIs RESTAURADOS
             k1, k2, k3, k4 = st.columns(4)
             k1.metric("Bultos Filtrados", f"{df_v['BULTOS'].sum():,.0f}")
             k2.metric("Preparación", f"$ {df_v['TOTAL_PREPARACION'].sum():,.2f}")
@@ -228,10 +231,6 @@ elif st.session_state['pagina_actual'] == "sistema":
             st.dataframe(df_h[df_h['MES_PROCESO'] == m_h], use_container_width=True)
             
             st.markdown("<br>", unsafe_allow_html=True)
-            col_b, _ = st.columns([1.5, 4])
-            with col_b:
-                st.markdown('<div class="small-btn">', unsafe_allow_html=True)
-                if st.button(f"🗑️ Eliminar historial de {m_h}", key="del_btn"):
-                    df_h = df_h[df_h['MES_PROCESO'] != m_h]
-                    df_h.to_csv(HISTORICO_FILE, index=False); st.rerun()
-                st.markdown('</div>', unsafe_allow_html=True)
+            if st.button(f"🗑️ Eliminar historial de {m_h}", key="del_btn"):
+                df_h = df_h[df_h['MES_PROCESO'] != m_h]
+                df_h.to_csv(HISTORICO_FILE, index=False); st.rerun()
