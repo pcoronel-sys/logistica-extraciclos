@@ -25,7 +25,7 @@ st.markdown(f"""
         border: 1px solid rgba(200, 200, 200, 0.3) !important; 
         border-radius: 20px !important; 
         height: 100px !important; 
-        width: 150% !important; 
+        width: 100% !important; 
         box-shadow: 0 20px 40px rgba(0,0,0,0.05) !important; 
         transition: all 0.6s cubic-bezier(0.165, 0.84, 0.44, 1.0) !important; 
         font-size: 1.4rem !important; 
@@ -184,10 +184,13 @@ elif st.session_state['pagina_actual'] == "sistema":
                             summary_f.to_excel(wr, index=False, sheet_name='Resumen')
                         st.download_button("📥 Descargar Resumen (Excel)", out_sum.getvalue(), f"Resumen_Bago_{mes_sel}.xlsx")
 
+                        # --- AJUSTE AQUÍ: GUARDAR CON MODO APPEND ---
                         if st.button("💾 Guardar en Historial"):
                             res['MES_PROCESO'] = mes_sel
-                            res.to_csv(HISTORICO_FILE, mode='a', index=False, header=not os.path.exists(HISTORICO_FILE))
-                            st.success("Guardado.")
+                            # Verificamos si el archivo existe para saber si escribimos el encabezado
+                            header_condition = not os.path.exists(HISTORICO_FILE)
+                            res.to_csv(HISTORICO_FILE, mode='a', index=False, header=header_condition)
+                            st.success(f"¡Datos de {mes_sel} añadidos al historial con éxito!")
 
                         st.session_state['res_actual'] = res
                         st.session_state['mes_actual'] = mes_sel
