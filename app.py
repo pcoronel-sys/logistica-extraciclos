@@ -92,7 +92,7 @@ elif st.session_state['pagina_actual'] == "sistema":
     m_gp = cargar_maestro(PATH_GP)
     m_costos = cargar_maestro(PATH_COSTOS)
 
-    with tabs[0]: # LIQUIDACIÓN
+    with tabs[0]: # PESTAÑA 1: LIQUIDACIÓN
         if m_gp is None or m_costos is None: 
             st.warning("⚠️ Cargue los maestros en la pestaña Configurar.")
         else:
@@ -103,6 +103,7 @@ elif st.session_state['pagina_actual'] == "sistema":
             if archivo:
                 df_c = leer_archivo(archivo)
                 if df_c is not None:
+                    # Normalización
                     df_c.columns = df_c.columns.str.strip().str.upper()
                     df_c['CODIGO'] = df_c['CODIGO'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                     df_c['DESCRIPCIÓN ZONA'] = df_c['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
@@ -119,12 +120,18 @@ elif st.session_state['pagina_actual'] == "sistema":
                     renames.update({c: "DESCRIPCIÓN ZONA" for c in m_costos_clean.columns if "ZONA" in c})
                     m_costos_clean = m_costos_clean.rename(columns=renames).drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
                     
+                    # Merge
                     res = pd.merge(df_c, m_gp_clean[[col_id_gp, 'GP', 'TIPO']], left_on='CODIGO', right_on=col_id_gp, how='left')
                     res = pd.merge(res, m_costos_clean[['DESCRIPCIÓN ZONA', 'P_PREP', 'P_TRANS']], on='DESCRIPCIÓN ZONA', how='left')
 
+                    # Validación Bloqueo
                     if res['GP'].isna().any() or res['P_PREP'].isna().any():
-                        st.error("🛑 BLOQUEO: Datos incompletos en maestros.")
+                        st.error("🛑 BLOQUEO: Hay códigos o zonas sin registro en maestros.")
+                        e1, e2 = st.columns(2)
+                        with e1: st.write("Códigos sin GP:", res[res['GP'].isna()]['CODIGO'].unique())
+                        with e2: st.write("Zonas sin Tarifa:", res[res['P_PREP'].isna()]['DESCRIPCIÓN ZONA'].unique())
                     else:
+                        # Cálculos
                         res['TOTAL_PREPARACION'] = res['P_PREP'] * res['BULTOS']
                         res['TOTAL_TRANSPORTE'] = res['P_TRANS'] * res['BULTOS']
                         res['SUBTOTAL_NETO'] = res['TOTAL_PREPARACION'] + res['TOTAL_TRANSPORTE']
@@ -139,76 +146,73 @@ elif st.session_state['pagina_actual'] == "sistema":
                         summary['SUBTOTAL'] = summary['MM'] + summary['MP']
                         summary['IVA 15%'] = summary['SUBTOTAL'] * 0.15
                         summary['TOTAL GENERAL'] = summary['SUBTOTAL'] + summary['IVA 15%']
+                        
                         summary_f = pd.concat([summary.reset_index(), pd.DataFrame([{'GP': '--- TOTALES ---', **summary.sum()}])], ignore_index=True)
-
                         st.table(summary_f.style.format(subset=summary_f.columns[1:], formatter="{:,.2f}"))
                         
-                        # --- NUEVO BOTÓN: DESCARGAR RESUMEN EXCEL (PESTAÑA 1) ---
+                        # Descarga Excel Resumen
                         out_sum = io.BytesIO()
                         with pd.ExcelWriter(out_sum, engine='openpyxl') as wr:
-                            summary_f.to_excel(wr, index=False, sheet_name='Resumen_Liquidacion')
-                        st.download_button("📥 Descargar Tabla de Resumen (Excel)", out_sum.getvalue(), f"Resumen_{mes_sel}.xlsx")
+                            summary_f.to_excel(wr, index=False, sheet_name='Resumen')
+                        st.download_button("📥 Descargar Reporte Resumen (Excel)", out_sum.getvalue(), f"Resumen_Bago_{mes_sel}.xlsx")
 
                         if st.button("💾 Guardar en Historial"):
                             res['MES_PROCESO'] = mes_sel
                             res.to_csv(HISTORICO_FILE, mode='a', index=False, header=not os.path.exists(HISTORICO_FILE))
-                            st.success(f"Datos de {mes_sel} guardados.")
+                            st.success("Guardado correctamente.")
 
                         st.session_state['res_actual'] = res
                         st.session_state['mes_actual'] = mes_sel
 
-    with tabs[1]: # DETALLE ACTUAL (Con Filtros y KPIs)
+    with tabs[1]: # PESTAÑA 2: DETALLE ACTUAL + FILTROS
         if 'res_actual' in st.session_state:
             df_full = st.session_state['res_actual']
             
-            # --- FILTROS DINÁMICOS ---
-            st.markdown("### 🔍 Filtrar Detalle")
+            # FILTROS
+            st.markdown("### 🔍 Filtros de Búsqueda")
             f1, f2, f3 = st.columns(3)
-            with f1: f_gp = st.multiselect("Filtrar por GP", options=sorted(df_full['GP'].unique()))
-            with f2: f_tipo = st.multiselect("Filtrar por Tipo", options=sorted(df_full['TIPO'].unique()))
-            with f3: f_zona = st.multiselect("Filtrar por Zona", options=sorted(df_full['DESCRIPCIÓN ZONA'].unique()))
+            with f1: sel_gp = st.multiselect("Filtrar por GP", options=sorted(df_full['GP'].unique()))
+            with f2: sel_tipo = st.multiselect("Filtrar por Tipo", options=sorted(df_full['TIPO'].unique()))
+            with f3: sel_zona = st.multiselect("Filtrar por Zona", options=sorted(df_full['DESCRIPCIÓN ZONA'].unique()))
 
-            df_filtro = df_full.copy()
-            if f_gp: df_filtro = df_filtro[df_filtro['GP'].isin(f_gp)]
-            if f_tipo: df_filtro = df_filtro[df_filtro['TIPO'].isin(f_tipo)]
-            if f_zona: df_filtro = df_filtro[df_filtro['DESCRIPCIÓN ZONA'].isin(f_zona)]
+            df_v = df_full.copy()
+            if sel_gp: df_v = df_v[df_v['GP'].isin(sel_gp)]
+            if sel_tipo: df_v = df_v[df_v['TIPO'].isin(sel_tipo)]
+            if sel_zona: df_v = df_v[df_v['DESCRIPCIÓN ZONA'].isin(sel_zona)]
 
-            # KPIs sobre data filtrada
-            m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Bultos Filtrados", f"{df_filtro['BULTOS'].sum():,.0f}")
-            m2.metric("Prep. Filtrada", f"$ {df_filtro['TOTAL_PREPARACION'].sum():,.2f}")
-            m3.metric("Trans. Filtrado", f"$ {df_filtro['TOTAL_TRANSPORTE'].sum():,.2f}")
-            m4.metric("Total Final", f"$ {df_filtro['TOTAL_FINAL'].sum():,.2f}")
+            # KPIs (Métricas)
+            k1, k2, k3, k4 = st.columns(4)
+            k1.metric("Bultos Filtrados", f"{df_v['BULTOS'].sum():,.0f}")
+            k2.metric("Preparación", f"$ {df_v['TOTAL_PREPARACION'].sum():,.2f}")
+            k3.metric("Transporte", f"$ {df_v['TOTAL_TRANSPORTE'].sum():,.2f}")
+            k4.metric("Total Final", f"$ {df_v['TOTAL_FINAL'].sum():,.2f}")
             
             st.divider()
             
-            # Descarga reporte completo
             out_det = io.BytesIO()
             with pd.ExcelWriter(out_det, engine='openpyxl') as writer:
-                df_filtro.to_excel(writer, index=False, sheet_name='Detalle_Filtrado')
-            st.download_button("📥 Descargar Detalle (Excel)", out_det.getvalue(), f"Detalle_{st.session_state['mes_actual']}.xlsx")
+                df_v.to_excel(writer, index=False, sheet_name='Detalle')
+            st.download_button("📥 Descargar Detalle Filtrado (Excel)", out_det.getvalue(), f"Detalle_Bago_{st.session_state['mes_actual']}.xlsx")
             
-            st.dataframe(df_filtro, use_container_width=True)
+            st.dataframe(df_v, use_container_width=True)
         else:
-            st.info("Sin datos procesados.")
+            st.info("Sin datos activos.")
 
     with tabs[2]: # CONFIG
         st.header("⚙️ Maestros")
         ca, cb = st.columns(2)
         with ca:
-            ug = st.file_uploader("Cargar Maestro GP", type=['xlsx', 'xls', 'csv'])
+            ug = st.file_uploader("GP", type=['csv','xlsx'])
             if ug:
-                d = leer_archivo(ug); d.columns = d.columns.str.strip().str.upper()
-                d.to_csv(PATH_GP, index=False); st.success("GP actualizado.")
+                d = leer_archivo(ug); d.to_csv(PATH_GP, index=False); st.success("GP OK")
         with cb:
-            uc = st.file_uploader("Cargar Maestro Costos", type=['xlsx', 'xls', 'csv'])
+            uc = st.file_uploader("Costos", type=['csv','xlsx'])
             if uc:
-                d = leer_archivo(uc); d.columns = d.columns.str.strip().str.upper()
-                d.to_csv(PATH_COSTOS, index=False); st.success("Costos actualizado.")
+                d = leer_archivo(uc); d.to_csv(PATH_COSTOS, index=False); st.success("Costos OK")
 
     with tabs[3]: # HISTORIAL
-        st.header("🗄️ Histórico")
+        st.header("🗄️ Historial")
         if os.path.exists(HISTORICO_FILE):
-            df_hist = pd.read_csv(HISTORICO_FILE)
-            sel_m = st.selectbox("Mes:", df_hist['MES_PROCESO'].unique())
-            st.dataframe(df_hist[df_hist['MES_PROCESO'] == sel_m])
+            df_h = pd.read_csv(HISTORICO_FILE)
+            m_h = st.selectbox("Mes Historial:", df_h['MES_PROCESO'].unique())
+            st.dataframe(df_h[df_h['MES_PROCESO'] == m_h])
