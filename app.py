@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 # 1. CONFIGURACIÓN DE PÁGINA
 st.set_page_config(page_title="Laboratorios Bagó - Conciliación", layout="wide", page_icon="🧪")
 
-# --- DISEÑO ESTÉTICO UI/UX PRO ---
+# --- DISEÑO ESTÉTICO UI/UX PRO (ESTILOS BAGO) ---
 MAGENTA_BAGO = "#C7006A" 
 MAGENTA_OSCURO = "#8A004A"
 
@@ -46,20 +46,22 @@ st.markdown(f"""
 if 'pagina_actual' not in st.session_state:
     st.session_state['pagina_actual'] = "inicio"
 
-# --- RUTAS ---
+# --- RUTAS DE ARCHIVOS ---
 PATH_GP = "master_gp.csv"
 PATH_COSTOS = "master_costos.csv"
 PATH_GP_VV = "master_gp_vv.csv"
 PATH_COSTOS_VV = "master_costos_vv.csv"
 HISTORICO_FILE = "base_historica_bago.csv"
 
-# --- FUNCIONES ---
+# --- FUNCIONES DE SOPORTE ---
 def cargar_maestro(path): return pd.read_csv(path) if os.path.exists(path) else None
+
 def leer_archivo(archivo):
     try:
         if archivo.name.lower().endswith(('.xlsx', '.xls')): return pd.read_excel(archivo)
         return pd.read_csv(archivo, encoding='latin-1')
     except: return None
+
 def format_excel(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -101,9 +103,9 @@ elif st.session_state['pagina_actual'] == "sistema":
 
     tabs = st.tabs(["🚀 Liquidación Mensual", "🔍 Detalle Actual", "⚙️ Configurar Maestros", "🗄️ Historial"])
 
-    with tabs[0]: # LIQUIDACIÓN
+    with tabs[0]: 
         if m_gp is None or m_costos is None: 
-            st.warning("⚠️ Cargue maestros en la pestaña Configurar.")
+            st.warning("⚠️ Cargue los maestros en la pestaña Configurar.")
         else:
             c1, c2 = st.columns([1, 2])
             with c1: mes_sel = st.selectbox("Mes", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"])
@@ -112,39 +114,47 @@ elif st.session_state['pagina_actual'] == "sistema":
             if archivo:
                 df_c = leer_archivo(archivo)
                 if df_c is not None:
+                    # Limpieza y Blindaje de Tipos
                     df_c.columns = df_c.columns.str.strip().str.upper()
                     df_c['CODIGO'] = df_c['CODIGO'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                     df_c['DESCRIPCIÓN ZONA'] = df_c['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
                     df_c['BULTOS'] = pd.to_numeric(df_c['BULTOS'], errors='coerce').fillna(0)
                     
-                    # PROCESAMIENTO
+                    # Limpieza Maestro GP (Evitar ValueError)
                     col_id = [c for c in m_gp.columns if 'CODIGO' in c.upper()][0]
-                    res = pd.merge(df_c, m_gp[[col_id, 'GP', 'TIPO']], left_on='CODIGO', right_on=col_id, how='left')
+                    m_gp_clean = m_gp.copy()
+                    m_gp_clean[col_id] = m_gp_clean[col_id].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                     
+                    # Merge Seguro
+                    res = pd.merge(df_c, m_gp_clean[[col_id, 'GP', 'TIPO']], left_on='CODIGO', right_on=col_id, how='left')
+                    
+                    # Limpieza Maestro Costos
                     m_cost_c = m_costos.copy()
                     m_cost_c.columns = m_cost_c.columns.str.strip().str.upper()
                     rn = {c: "P_PREP" for c in m_cost_c.columns if "PREP" in c}
                     rn.update({c: "P_TRANS" for c in m_cost_c.columns if "TRANS" in c})
                     rn.update({c: "DESCRIPCIÓN ZONA" for c in m_cost_c.columns if "ZONA" in c})
                     m_cost_c = m_cost_c.rename(columns=rn)
+                    m_cost_c['DESCRIPCIÓN ZONA'] = m_cost_c['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
                     
                     res = pd.merge(res, m_cost_c[['DESCRIPCIÓN ZONA', 'P_PREP', 'P_TRANS']], on='DESCRIPCIÓN ZONA', how='left')
                     
+                    # Cálculos Finales
                     res['TOTAL_PREPARACION'] = res['P_PREP'] * res['BULTOS']
                     res['TOTAL_TRANSPORTE'] = res['P_TRANS'] * res['BULTOS']
                     res['SUBTOTAL_NETO'] = res['TOTAL_PREPARACION'] + res['TOTAL_TRANSPORTE']
                     res['IVA_15'] = res['SUBTOTAL_NETO'] * 0.15
                     res['TOTAL_FINAL'] = res['SUBTOTAL_NETO'] + res['IVA_15']
 
-                    # RESUMEN Y KPIs
-                    st.subheader(f"📋 Resumen: {mes_sel}")
+                    # KPIs VISUALES
+                    st.subheader(f"📋 Resumen Extra Ciclos: {mes_sel}")
                     k1, k2, k3 = st.columns(3)
                     k1.metric("Bultos Totales", f"{res['BULTOS'].sum():,.0f}")
                     k2.metric("Subtotal Neto", f"$ {res['SUBTOTAL_NETO'].sum():,.2f}")
-                    k3.metric("Total c/ IVA", f"$ {res['TOTAL_FINAL'].sum():,.2f}")
+                    k3.metric("Total Final (IVA)", f"$ {res['TOTAL_FINAL'].sum():,.2f}")
                     
                     summary = res.pivot_table(index='GP', columns='TIPO', values='SUBTOTAL_NETO', aggfunc='sum').fillna(0)
-                    summary['TOTAL'] = summary.sum(axis=1)
+                    summary['TOTAL GP'] = summary.sum(axis=1)
                     st.table(summary.style.format("{:,.2f}"))
                     st.session_state['res_extra'] = res
 
@@ -152,15 +162,14 @@ elif st.session_state['pagina_actual'] == "sistema":
         st.header("⚙️ Maestros Extra Ciclos")
         ca, cb = st.columns(2)
         with ca:
-            ug = st.file_uploader("Maestro GP", key="ug1")
-            if ug: cargar_maestro(PATH_GP) # Solo para activar el guardado
-            if ug: leer_archivo(ug).to_csv(PATH_GP, index=False); st.success("GP OK")
+            ug = st.file_uploader("Cargar Maestro GP", key="ug_ex")
+            if ug: leer_archivo(ug).to_csv(PATH_GP, index=False); st.success("GP Guardado")
         with cb:
-            uc = st.file_uploader("Maestro Costos", key="uc1")
-            if uc: leer_archivo(uc).to_csv(PATH_COSTOS, index=False); st.success("Costos OK")
+            uc = st.file_uploader("Cargar Maestro Costos", key="uc_ex")
+            if uc: leer_archivo(uc).to_csv(PATH_COSTOS, index=False); st.success("Costos Guardado")
 
 # ---------------------------------------------------------
-# PANTALLA 3: VV / REPROGRAMA (RESTAURADA CON DISEÑO COMPLETO)
+# PANTALLA 3: VV / REPROGRAMA (SISTEMA INDEPENDIENTE)
 # ---------------------------------------------------------
 elif st.session_state['pagina_actual'] == "reprograma":
     if st.sidebar.button("⬅️ Volver al Menú Principal"):
@@ -176,62 +185,65 @@ elif st.session_state['pagina_actual'] == "reprograma":
 
     with tabs_v[0]: # LIQUIDACIÓN VV
         if m_gp_vv is None or m_costos_vv is None:
-            st.warning("⚠️ Cargue los maestros específicos de VV en la pestaña Configurar.")
+            st.warning("⚠️ Cargue los maestros específicos para VV en la pestaña Configurar.")
         else:
             c1v, c2v = st.columns([1, 2])
-            with c1v: mes_v = st.selectbox("Mes VV", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], key="m_vv")
-            with c2v: arch_v = st.file_uploader("Subir Carga Mensual VV", type=['xlsx', 'xls', 'csv'], key="a_vv")
+            with c1v: mes_v = st.selectbox("Mes Proceso VV", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], key="mvv")
+            with c2v: arch_v = st.file_uploader("Subir Carga Mensual VV", type=['xlsx', 'xls', 'csv'], key="avv")
 
             if arch_v:
                 df_v = leer_archivo(arch_v)
                 if df_v is not None:
+                    # Blindaje de Datos
                     df_v.columns = df_v.columns.str.strip().str.upper()
                     df_v['CODIGO'] = df_v['CODIGO'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                     df_v['DESCRIPCIÓN ZONA'] = df_v['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
                     df_v['BULTOS'] = pd.to_numeric(df_v['BULTOS'], errors='coerce').fillna(0)
                     
-                    # PROCESAMIENTO VV
+                    # Blindaje Maestro GP VV
                     col_id_v = [c for c in m_gp_vv.columns if 'CODIGO' in c.upper()][0]
-                    res_v = pd.merge(df_v, m_gp_vv[[col_id_v, 'GP', 'TIPO']], left_on='CODIGO', right_on=col_id_v, how='left')
+                    m_gp_vv_c = m_gp_vv.copy()
+                    m_gp_vv_c[col_id_v] = m_gp_vv_c[col_id_v].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                     
+                    # Merge Seguro VV
+                    res_v = pd.merge(df_v, m_gp_vv_c[[col_id_v, 'GP', 'TIPO']], left_on='CODIGO', right_on=col_id_v, how='left')
+                    
+                    # Limpieza Maestro Costos VV
                     m_ct_v = m_costos_vv.copy()
                     m_ct_v.columns = m_ct_v.columns.str.strip().str.upper()
                     rn_v = {c: "P_PREP" for c in m_ct_v.columns if "PREP" in c}
                     rn_v.update({c: "P_TRANS" for c in m_ct_v.columns if "TRANS" in c})
                     rn_v.update({c: "DESCRIPCIÓN ZONA" for c in m_ct_v.columns if "ZONA" in c})
                     m_ct_v = m_ct_v.rename(columns=rn_v)
+                    m_ct_v['DESCRIPCIÓN ZONA'] = m_ct_v['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
                     
                     res_v = pd.merge(res_v, m_ct_v[['DESCRIPCIÓN ZONA', 'P_PREP', 'P_TRANS']], on='DESCRIPCIÓN ZONA', how='left')
                     
+                    # Cálculos VV
                     res_v['TOTAL_PREPARACION'] = res_v['P_PREP'] * res_v['BULTOS']
                     res_v['TOTAL_TRANSPORTE'] = res_v['P_TRANS'] * res_v['BULTOS']
                     res_v['SUBTOTAL_NETO'] = res_v['TOTAL_PREPARACION'] + res_v['TOTAL_TRANSPORTE']
                     res_v['IVA_15%'] = res_v['SUBTOTAL_NETO'] * 0.15
                     res_v['TOTAL_FINAL'] = res_v['SUBTOTAL_NETO'] + res_v['IVA_15%']
 
-                    # DISEÑO RESTAURADO (KPIs Y TABLAS)
+                    # KPIs VISUALES VV
                     st.subheader(f"📊 Resumen VV: {mes_v}")
                     kv1, kv2, kv3 = st.columns(3)
                     kv1.metric("Bultos VV", f"{res_v['BULTOS'].sum():,.0f}")
                     kv2.metric("Subtotal VV", f"$ {res_v['SUBTOTAL_NETO'].sum():,.2f}")
-                    kv3.metric("Total VV c/ IVA", f"$ {res_v['TOTAL_FINAL'].sum():,.2f}")
+                    kv3.metric("Total VV Final", f"$ {res_v['TOTAL_FINAL'].sum():,.2f}")
                     
                     summary_v = res_v.pivot_table(index='GP', columns='TIPO', values='SUBTOTAL_NETO', aggfunc='sum').fillna(0)
-                    summary_v['TOTAL'] = summary_v.sum(axis=1)
+                    summary_v['TOTAL GP'] = summary_v.sum(axis=1)
                     st.table(summary_v.style.format("{:,.2f}"))
-                    
-                    st.session_state['res_vv_final'] = res_v
-
-    with tabs_v[1]: # DETALLE VV
-        if 'res_vv_final' in st.session_state:
-            st.dataframe(st.session_state['res_vv_final'], use_container_width=True)
+                    st.session_state['res_vv_actual'] = res_v
 
     with tabs_v[2]: # CONFIGURACIÓN VV
         st.header("⚙️ Maestros Exclusivos VV")
         cva, cvb = st.columns(2)
         with cva:
-            ugv = st.file_uploader("Maestro GP (VV)", key="ugv")
-            if ugv: leer_archivo(ugv).to_csv(PATH_GP_VV, index=False); st.success("GP VV OK")
+            ugv = st.file_uploader("Maestro GP (VV)", key="ug_vv")
+            if ugv: leer_archivo(ugv).to_csv(PATH_GP_VV, index=False); st.success("GP VV Guardado")
         with cvb:
-            ucv = st.file_uploader("Maestro Costos (VV)", key="ucv")
-            if ucv: leer_archivo(ucv).to_csv(PATH_COSTOS_VV, index=False); st.success("Costos VV OK")
+            ucv = st.file_uploader("Maestro Costos (VV)", key="uc_vv")
+            if ucv: leer_archivo(ucv).to_csv(PATH_COSTOS_VV, index=False); st.success("Costos VV Guardado")
