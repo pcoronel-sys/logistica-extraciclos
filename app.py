@@ -412,12 +412,24 @@ elif st.session_state['pagina_actual'] == "sistema_reprograma":
                     df_h.to_csv(HISTORICO_REPRO_FILE, index=False)
                     st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
-# --- BOTÓN DE REGRESO GLOBAL (AL FINAL DEL ARCHIVO) ---
-st.markdown("<br><br>", unsafe_allow_html=True) # Espacio para que no se pegue a las tablas
-col_btn, _ = st.columns([1.5, 8.5]) # Creamos una columna pequeña para controlar el tamaño
+# --- BOTÓN DE REGRESO GLOBAL PEQUEÑO ---
+st.markdown("""
+    <style>
+    .btn-chico button {
+        height: 40px !important;
+        width: 120px !important;
+        font-size: 0.9rem !important;
+        margin-top: 50px !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+col_btn, _ = st.columns([1, 8]) 
 
 with col_btn:
+    st.markdown('<div class="btn-chico">', unsafe_allow_html=True)
     if st.button("🏠 INICIO", key="btn_inicio_global"):
         st.session_state['pagina_actual'] = "inicio"
         st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
