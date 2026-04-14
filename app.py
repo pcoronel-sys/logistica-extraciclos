@@ -412,24 +412,25 @@ elif st.session_state['pagina_actual'] == "sistema_reprograma":
                     df_h.to_csv(HISTORICO_REPRO_FILE, index=False)
                     st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
-# --- BOTÓN DE REGRESO GLOBAL PEQUEÑO ---
-st.markdown("""
-    <style>
-    .btn-chico button {
-        height: 25px !important;
-        width: 25px !important;
-        font-size: 0.9rem !important;
-        margin-top: 60px !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+# --- BOTÓN DE REGRESO (SOLO VISIBLE FUERA DE INICIO) ---
+if st.session_state['pagina_actual'] != "inicio":
+    st.markdown("""
+        <style>
+        .btn-derecha button {
+            height: 20px !important;
+            width: 20px !important;
+            font-size: 0.9rem !important;
+            border-radius: 10px !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
 
-col_btn, _ = st.columns([1, 8]) 
-
-with col_btn:
-    st.markdown('<div class="btn-chico">', unsafe_allow_html=True)
-    if st.button("🏠", key="btn_inicio_global"):
-        st.session_state['pagina_actual'] = "inicio"
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
+    # Ajuste de columnas para pegarlo a la derecha
+    cols = st.columns([8.5, 1.5]) 
+    with cols[1]:
+        st.markdown('<div class="btn-derecha">', unsafe_allow_html=True)
+        if st.button("🏠 INICIO", key="btn_inicio_dinamico"):
+            st.session_state['pagina_actual'] = "inicio"
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
