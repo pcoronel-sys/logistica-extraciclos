@@ -93,7 +93,7 @@ if st.session_state['pagina_actual'] == "inicio":
     
     _, col_l, col_r, _ = st.columns([6.5, 1.8, 1.8, 6.5])
     with col_l:
-        if st.button("\n\n EXTRA CICLOS"):
+        if st.button("\n\n   EXTRA CICLOS"):
             st.session_state['pagina_actual'] = "sistema" 
             st.rerun()
     with col_r:
