@@ -5,7 +5,7 @@ import io
 from datetime import datetime, timedelta
 
 # 1. CONFIGURACIÓN DE PÁGINA
-st.set_page_config(page_title="Laboratorios Bagó - Conciliación Logística", layout="wide", page_icon="🧪")
+st.set_page_config(page_title="Laboratorios Bagó - Conciliación Extra Ciclos", layout="wide", page_icon="🧪")
 
 # --- DISEÑO ESTÉTICO UI/UX PRO (ESTILOS BAGO) ---
 MAGENTA_BAGO = "#C7006A" 
@@ -37,41 +37,44 @@ st.markdown(f"""
         transform: translateY(-15px) scale(1.03) !important; 
     }}
     
-    .stDownloadButton button, .nav-button button {{
+    /* Estilo para los botones de descarga */
+    .stDownloadButton button {{
         height: 45px !important;
         width: auto !important;
         font-size: 1rem !important;
+        padding: 0 25px !important;
         border-radius: 12px !important;
-        padding: 0 20px !important;
         background-color: white !important;
         border: 1px solid #ddd !important;
+        color: #333 !important;
     }}
+
+    [data-testid="stSidebar"] {{ background-color: white !important; border-right: 1px solid #eee; }}
+    [data-testid="stTable"] thead tr th {{ background-color: #2C3E50 !important; color: white !important; font-weight: bold !important; }}
+    div[data-testid="stMetric"] {{ background: white !important; border-radius: 20px !important; padding: 20px !important; border-left: 8px solid {MAGENTA_BAGO} !important; box-shadow: 0 10px 20px rgba(0,0,0,0.04) !important; }}
     </style>
     """, unsafe_allow_html=True)
 
 if 'pagina_actual' not in st.session_state:
     st.session_state['pagina_actual'] = "inicio"
 
-# --- RUTAS ---
 PATH_GP = "master_gp.csv"
 PATH_COSTOS = "master_costos.csv"
 PATH_GP_VV = "master_gp_vv.csv"
 PATH_COSTOS_VV = "master_costos_vv.csv"
-HISTORICO_FILE = "base_historica_bago.csv"
 
-# --- FUNCIONES ---
 def cargar_maestro(path): return pd.read_csv(path) if os.path.exists(path) else None
-
 def leer_archivo(archivo):
     try:
         if archivo.name.lower().endswith(('.xlsx', '.xls')): return pd.read_excel(archivo)
         return pd.read_csv(archivo, encoding='latin-1')
     except: return None
 
-def descargar_excel(df):
+# --- FUNCIÓN DE DESCARGA EXCEL ---
+def to_excel(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Reporte')
+        df.to_excel(writer, index=False, sheet_name='Datos')
     return output.getvalue()
 
 hora_ajustada = (datetime.now() - timedelta(hours=5)).hour
@@ -97,10 +100,10 @@ if st.session_state['pagina_actual'] == "inicio":
             st.rerun()
 
 # ---------------------------------------------------------
-# PANTALLA 2: EXTRA CICLOS
+# PANTALLA 2: EXTRA CICLOS (INTACTA)
 # ---------------------------------------------------------
 elif st.session_state['pagina_actual'] == "sistema":
-    if st.button("⬅️ Menú Principal", key="nav_ex"):
+    if st.sidebar.button("⬅️ Volver al Menú Principal"):
         st.session_state['pagina_actual'] = "inicio"
         st.rerun()
 
@@ -151,45 +154,26 @@ elif st.session_state['pagina_actual'] == "sistema":
                     summary_f = pd.concat([summary.reset_index(), pd.DataFrame([{'GP': '--- TOTALES ---', **summary.sum()}])], ignore_index=True)
                     st.table(summary_f.style.format(subset=summary_f.columns[1:], formatter="{:,.2f}"))
                     
-                    st.download_button("📥 Descargar Resumen (Excel)", descargar_excel(summary_f), f"Resumen_Extra_{mes_sel}.xlsx")
-
-                    if st.button("💾 Guardar en Historial"):
-                        res['MES_PROCESO'] = mes_sel
-                        if os.path.exists(HISTORICO_FILE):
-                            df_h_old = pd.read_csv(HISTORICO_FILE); df_h_old = df_h_old[df_h_old['MES_PROCESO'] != mes_sel]
-                            pd.concat([df_h_old, res]).to_csv(HISTORICO_FILE, index=False)
-                        else: res.to_csv(HISTORICO_FILE, index=False)
-                        st.success("Guardado correctamente.")
+                    # DESCARGA RESUMEN EXTRA CICLOS
+                    st.download_button("📥 Descargar Resumen (Excel)", to_excel(summary_f), f"Resumen_ExtraCiclos_{mes_sel}.xlsx")
                     st.session_state['res_actual'] = res
+                    st.session_state['mes_sel_ex'] = mes_sel
 
-    with tabs[1]: 
+    with tabs[1]: # DETALLE ORIGINAL
         if 'res_actual' in st.session_state:
             df_v = st.session_state['res_actual']
             k1, k2, k3, k4 = st.columns(4)
             k1.metric("Bultos", f"{df_v['BULTOS'].sum():,.0f}"); k2.metric("Prep.", f"$ {df_v['TOTAL_PREPARACION'].sum():,.2f}"); k3.metric("Trans.", f"$ {df_v['TOTAL_TRANSPORTE'].sum():,.2f}"); k4.metric("Total Final", f"$ {df_v['TOTAL_FINAL'].sum():,.2f}")
             st.divider()
-            st.download_button("📥 Descargar Detalle (Excel)", descargar_excel(df_v), "Detalle_ExtraCiclos.xlsx")
+            # DESCARGA DETALLE EXTRA CICLOS
+            st.download_button("📥 Descargar Detalle (Excel)", to_excel(df_v), f"Detalle_ExtraCiclos_{st.session_state['mes_sel_ex']}.xlsx")
             st.dataframe(df_v, use_container_width=True)
-
-    with tabs[3]: # HISTORIAL
-        st.header("🗄️ Historial")
-        if os.path.exists(HISTORICO_FILE):
-            df_h = pd.read_csv(HISTORICO_FILE)
-            op_mes = sorted([str(x) for x in df_h['MES_PROCESO'].dropna().unique()])
-            if op_mes:
-                m_h = st.selectbox("Ver Mes:", op_mes)
-                df_mostrar = df_h[df_h['MES_PROCESO'] == m_h]
-                st.dataframe(df_mostrar, use_container_width=True)
-                if st.button(f"🗑️ Eliminar historial de {m_h}"):
-                    df_h = df_h[df_h['MES_PROCESO'] != m_h]
-                    df_h.to_csv(HISTORICO_FILE, index=False)
-                    st.rerun()
 
 # ---------------------------------------------------------
 # PANTALLA 3: VV / REPROGRAMA
 # ---------------------------------------------------------
 elif st.session_state['pagina_actual'] == "reprograma":
-    if st.button("⬅️ Menú Principal", key="nav_vv"):
+    if st.sidebar.button("⬅️ Volver al Menú Principal"):
         st.session_state['pagina_actual'] = "inicio"
         st.rerun()
 
@@ -221,39 +205,53 @@ elif st.session_state['pagina_actual'] == "reprograma":
                     
                     mct_v = m_costos_vv.copy(); mct_v.columns = mct_v.columns.str.strip().str.upper()
                     rn_v = {c: "P_PREP" for c in mct_v.columns if "PREP" in c}; rn_v.update({c: "P_TRANS" for c in mct_v.columns if "TRANS" in c}); rn_v.update({c: "DESCRIPCIÓN ZONA" for c in mct_v.columns if "ZONA" in c})
-                    mct_v = mct_v.rename(columns=rn_v).drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
+                    mct_v = mct_v.rename(columns=rn_v); mct_v['DESCRIPCIÓN ZONA'] = mct_v['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
+                    mct_v = mct_v.drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
                     
                     res_v = pd.merge(df_vv, mgp_v[[id_v, 'GP', 'TIPO']], left_on='CODIGO', right_on=id_v, how='left')
                     res_v = pd.merge(res_v, mct_v[['DESCRIPCIÓN ZONA', 'P_PREP', 'P_TRANS']], on='DESCRIPCIÓN ZONA', how='left')
-                    res_v['SUBTOTAL_NETO'] = (res_v['P_PREP'] + res_v['P_TRANS']) * res_v['BULTOS']
+                    
+                    res_v['TOTAL_PREPARACION'] = res_v['P_PREP'] * res_v['BULTOS']
+                    res_v['TOTAL_TRANSPORTE'] = res_v['P_TRANS'] * res_v['BULTOS']
+                    res_v['SUBTOTAL_NETO'] = res_v['TOTAL_PREPARACION'] + res_v['TOTAL_TRANSPORTE']
+                    res_v['IVA_15'] = res_v['SUBTOTAL_NETO'] * 0.15
+                    res_v['TOTAL_FINAL'] = res_v['SUBTOTAL_NETO'] + res_v['IVA_15']
 
                     st.subheader(f"📊 Resumen VV: {mes_vv}")
-                    sum_v = res_v.groupby('GP')['SUBTOTAL_NETO'].sum().reset_index().rename(columns={'SUBTOTAL_NETO': 'SUBTOTAL'})
+                    sum_v = res_v.groupby('GP')['SUBTOTAL_NETO'].sum().reset_index()
+                    sum_v = sum_v.rename(columns={'SUBTOTAL_NETO': 'SUBTOTAL'})
                     sum_v['IVA 15%'] = sum_v['SUBTOTAL'] * 0.15
                     sum_v['TOTAL GENERAL'] = sum_v['SUBTOTAL'] + sum_v['IVA 15%']
-                    sum_v_f = pd.concat([sum_v, pd.DataFrame([{'GP': '--- TOTALES ---', **sum_v.sum()}])], ignore_index=True)
+                    
+                    totales_row = pd.DataFrame([{
+                        'GP': '--- TOTALES ---',
+                        'SUBTOTAL': sum_v['SUBTOTAL'].sum(),
+                        'IVA 15%': sum_v['IVA 15%'].sum(),
+                        'TOTAL GENERAL': sum_v['TOTAL GENERAL'].sum()
+                    }])
+                    sum_v_f = pd.concat([sum_v, totales_row], ignore_index=True)
                     st.table(sum_v_f.style.format(subset=['SUBTOTAL', 'IVA 15%', 'TOTAL GENERAL'], formatter="{:,.2f}"))
                     
-                    st.download_button("📥 Descargar Resumen VV (Excel)", descargar_excel(sum_v_f), f"Resumen_VV_{mes_vv}.xlsx")
+                    # DESCARGA RESUMEN VV
+                    st.download_button("📥 Descargar Resumen VV (Excel)", to_excel(sum_v_f), f"Resumen_VV_{mes_vv}.xlsx")
                     st.session_state['res_vv_final'] = res_v
+                    st.session_state['mes_sel_vv'] = mes_vv
 
-    with tabs_v[1]: 
+    with tabs_v[1]: # DETALLE VV
         if 'res_vv_final' in st.session_state:
             dv = st.session_state['res_vv_final']
-            st.download_button("📥 Descargar Detalle VV (Excel)", descargar_excel(dv), "Detalle_VV.xlsx")
+            kv1, kv2, kv3, kv4 = st.columns(4)
+            kv1.metric("Bultos", f"{dv['BULTOS'].sum():,.0f}"); kv2.metric("Prep.", f"$ {dv['TOTAL_PREPARACION'].sum():,.2f}"); kv3.metric("Trans.", f"$ {dv['TOTAL_TRANSPORTE'].sum():,.2f}"); kv4.metric("Total Final", f"$ {dv['TOTAL_FINAL'].sum():,.2f}")
+            st.divider()
+            # DESCARGA DETALLE VV
+            st.download_button("📥 Descargar Detalle VV (Excel)", to_excel(dv), f"Detalle_VV_{st.session_state['mes_sel_vv']}.xlsx")
             st.dataframe(dv, use_container_width=True)
 
-# CONFIGURACIÓN
-if st.session_state['pagina_actual'] != "inicio":
-    with tabs[2] if st.session_state['pagina_actual'] == "sistema" else tabs_v[2]:
+    with tabs_v[2]: # CONFIG VV
         cva, cvb = st.columns(2)
         with cva:
-            ugv = st.file_uploader("Maestro GP", key="ugvv")
-            if ugv:
-                p = PATH_GP if st.session_state['pagina_actual'] == "sistema" else PATH_GP_VV
-                leer_archivo(ugv).to_csv(p, index=False); st.success("OK")
+            ugv = st.file_uploader("Maestro GP VV", key="ugvv")
+            if ugv: leer_archivo(ugv).to_csv(PATH_GP_VV, index=False); st.success("OK")
         with cvb:
-            ucv = st.file_uploader("Maestro Costos", key="ucvv")
-            if ucv:
-                p = PATH_COSTOS if st.session_state['pagina_actual'] == "sistema" else PATH_COSTOS_VV
-                leer_archivo(ucv).to_csv(p, index=False); st.success("OK")
+            ucv = st.file_uploader("Maestro Costos VV", key="ucvv")
+            if ucv: leer_archivo(ucv).to_csv(PATH_COSTOS_VV, index=False); st.success("OK")
