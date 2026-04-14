@@ -417,7 +417,7 @@ st.markdown("""
     <style>
     .btn-chico button {
         height: 30px !important;
-        width: 100px !important;
+        width: 50px !important;
         font-size: 0.9rem !important;
         margin-top: 40px !important;
     }
