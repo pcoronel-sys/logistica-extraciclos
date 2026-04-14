@@ -45,6 +45,7 @@ st.markdown(f"""
         border-radius: 12px !important;
         background-color: white !important;
         border: 1px solid #ddd !important;
+        color: #333 !important;
     }}
 
     [data-testid="stSidebar"] {{ background-color: white !important; border-right: 1px solid #eee; }}
@@ -56,12 +57,14 @@ st.markdown(f"""
 if 'pagina_actual' not in st.session_state:
     st.session_state['pagina_actual'] = "inicio"
 
+# RUTAS DE ARCHIVOS
 PATH_GP = "master_gp.csv"
 PATH_COSTOS = "master_costos.csv"
 PATH_GP_VV = "master_gp_vv.csv"
 PATH_COSTOS_VV = "master_costos_vv.csv"
 
 def cargar_maestro(path): return pd.read_csv(path) if os.path.exists(path) else None
+
 def leer_archivo(archivo):
     try:
         if archivo.name.lower().endswith(('.xlsx', '.xls')): return pd.read_excel(archivo)
@@ -141,7 +144,7 @@ elif st.session_state['pagina_actual'] == "sistema":
                     res['IVA_15%'] = res['SUBTOTAL_NETO'] * 0.15
                     res['TOTAL_FINAL'] = res['SUBTOTAL_NETO'] + res['IVA_15%']
 
-                    st.subheader(f"📋 Resumen Extra Ciclos: {mes_sel}")
+                    st.subheader(f"📋 Resumen: {mes_sel}")
                     summary = res.pivot_table(index='GP', columns='TIPO', values='SUBTOTAL_NETO', aggfunc='sum').fillna(0)
                     for col in ['MM', 'MP']:
                         if col not in summary.columns: summary[col] = 0.0
@@ -158,7 +161,10 @@ elif st.session_state['pagina_actual'] == "sistema":
         if 'res_actual' in st.session_state:
             df_v = st.session_state['res_actual']
             k1, k2, k3, k4 = st.columns(4)
-            k1.metric("Bultos", f"{df_v['BULTOS'].sum():,.0f}"); k2.metric("Prep.", f"$ {df_v['TOTAL_PREPARACION'].sum():,.2f}"); k3.metric("Trans.", f"$ {df_v['TOTAL_TRANSPORTE'].sum():,.2f}"); k4.metric("Total Final", f"$ {df_v['TOTAL_FINAL'].sum():,.2f}")
+            k1.metric("Bultos", f"{df_v['BULTOS'].sum():,.0f}")
+            k2.metric("Prep.", f"$ {df_v['TOTAL_PREPARACION'].sum():,.2f}")
+            k3.metric("Trans.", f"$ {df_v['TOTAL_TRANSPORTE'].sum():,.2f}")
+            k4.metric("Total Final", f"$ {df_v['TOTAL_FINAL'].sum():,.2f}")
             st.divider()
             st.download_button("📥 Descargar Detalle (Excel)", to_excel(df_v), "Detalle_ExtraCiclos.xlsx")
             st.dataframe(df_v, use_container_width=True)
@@ -167,10 +173,10 @@ elif st.session_state['pagina_actual'] == "sistema":
         st.header("⚙️ Configuración Maestros")
         ca, cb = st.columns(2)
         with ca:
-            ug = st.file_uploader("Cargar GP", key="ug_ex")
+            ug = st.file_uploader("Cargar Maestro GP", key="ug_ex")
             if ug: leer_archivo(ug).to_csv(PATH_GP, index=False); st.success("GP OK")
         with cb:
-            uc = st.file_uploader("Cargar Costos", key="uc_ex")
+            uc = st.file_uploader("Cargar Maestro Costos", key="uc_ex")
             if uc: leer_archivo(uc).to_csv(PATH_COSTOS, index=False); st.success("Costos OK")
 
 # ---------------------------------------------------------
@@ -188,7 +194,7 @@ elif st.session_state['pagina_actual'] == "reprograma":
 
     with tabs_v[0]:
         if m_gp_vv is None or m_costos_vv is None:
-            st.warning("⚠️ Cargue maestros específicos para VV.")
+            st.warning("⚠️ Cargue los maestros específicos para VV.")
         else:
             c1v, c2v = st.columns([1, 2])
             with c1v: mes_vv = st.selectbox("Mes VV", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], key="mvv")
@@ -232,6 +238,7 @@ elif st.session_state['pagina_actual'] == "reprograma":
     with tabs_v[1]:
         if 'res_vv' in st.session_state:
             dv = st.session_state['res_vv']
+            # KPI’S DEL BOTÓN 2 REINSTALADOS
             kv1, kv2, kv3, kv4 = st.columns(4)
             kv1.metric("Bultos", f"{dv['BULTOS'].sum():,.0f}")
             kv2.metric("Prep.", f"$ {dv['TOTAL_PREPARACION'].sum():,.2f}")
@@ -245,8 +252,8 @@ elif st.session_state['pagina_actual'] == "reprograma":
         st.header("⚙️ Maestros VV")
         cva, cvb = st.columns(2)
         with cva:
-            ugv = st.file_uploader("Cargar GP VV", key="ugvv")
-            if ugv: leer_archivo(ugv).to_csv(PATH_GP_VV, index=False); st.success("OK VV")
+            ugv = st.file_uploader("Cargar Maestro GP VV", key="ugvv")
+            if ugv: leer_archivo(ugv).to_csv(PATH_GP_VV, index=False); st.success("GP VV OK")
         with cvb:
-            ucv = st.file_uploader("Cargar Costos VV", key="ucvv")
-            if ucv: leer_archivo(ucv).to_csv(PATH_COSTOS_VV, index=False); st.success("OK VV")
+            ucv = st.file_uploader("Cargar Maestro Costos VV", key="ucvv")
+            if ucv: leer_archivo(ucv).to_csv(PATH_COSTOS_VV, index=False); st.success("Costos VV OK")
