@@ -418,7 +418,7 @@ if st.session_state['pagina_actual'] != "inicio":
         <style>
         .btn-derecha button {
             height: 5px !important;
-            width: 20px !important;
+            width: 5px !important;
             font-size: 0.9rem !important;
             border-radius: 10px !important;
         }
