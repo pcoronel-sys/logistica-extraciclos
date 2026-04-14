@@ -168,10 +168,10 @@ elif st.session_state['pagina_actual'] == "sistema":
         ca, cb = st.columns(2)
         with ca:
             ug = st.file_uploader("Cargar GP", key="ug_ex")
-            if ug: leer_archivo(ug).to_csv(PATH_GP, index=False); st.success("GP OK")
+            if ug: leer_archivo(ug).to_csv(PATH_GP, index=False); st.success("GP Extra Ciclos OK")
         with cb:
             uc = st.file_uploader("Cargar Costos", key="uc_ex")
-            if uc: leer_archivo(uc).to_csv(PATH_COSTOS, index=False); st.success("Costos OK")
+            if uc: leer_archivo(uc).to_csv(PATH_COSTOS, index=False); st.success("Costos Extra Ciclos OK")
 
 # ---------------------------------------------------------
 # PANTALLA 3: VV / REPROGRAMA
@@ -189,7 +189,7 @@ elif st.session_state['pagina_actual'] == "reprograma":
 
     with tabs_v[0]:
         if m_gp_vv is None or m_costos_vv is None:
-            st.warning("⚠️ Cargue los maestros específicos para VV.")
+            st.warning("⚠️ Cargue los maestros específicos para VV en la pestaña Configurar.")
         else:
             c1v, c2v = st.columns([1, 2])
             with c1v: mes_vv = st.selectbox("Mes VV", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], key="mvv")
@@ -230,10 +230,10 @@ elif st.session_state['pagina_actual'] == "reprograma":
                     st.download_button("📥 Descargar Resumen VV (Excel)", to_excel(sum_v_f), f"Resumen_VV_{mes_vv}.xlsx")
                     st.session_state['res_vv_final'] = res_v
 
-    with tabs_v[1]: # DETALLE VV CON KPIs RESTAURADOS
+    with tabs_v[1]: # DETALLE VV (KPIs RESTAURADOS)
         if 'res_vv_final' in st.session_state:
             dv = st.session_state['res_vv_final']
-            # KPIs RESTAURADOS AQUÍ
+            # KPIs AQUÍ
             kv1, kv2, kv3, kv4 = st.columns(4)
             kv1.metric("Bultos", f"{dv['BULTOS'].sum():,.0f}")
             kv2.metric("Prep.", f"$ {dv['TOTAL_PREPARACION'].sum():,.2f}")
@@ -244,11 +244,11 @@ elif st.session_state['pagina_actual'] == "reprograma":
             st.dataframe(dv, use_container_width=True)
 
     with tabs_v[2]: 
-        st.header("⚙️ Maestros VV")
+        st.header("⚙️ Configuración Maestros VV")
         cva, cvb = st.columns(2)
         with cva:
             ugv = st.file_uploader("Cargar GP VV", key="ugvv")
-            if ugv: leer_archivo(ugv).to_csv(PATH_GP_VV, index=False); st.success("OK VV")
+            if ugv: leer_archivo(ugv).to_csv(PATH_GP_VV, index=False); st.success("GP VV OK")
         with cvb:
             ucv = st.file_uploader("Cargar Costos VV", key="ucvv")
-            if ucv: leer_archivo(ucv).to_csv(PATH_COSTOS_VV, index=False); st.success("OK VV")
+            if ucv: leer_archivo(ucv).to_csv(PATH_COSTOS_VV, index=False); st.success("Costos VV OK")
