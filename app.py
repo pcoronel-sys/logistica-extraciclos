@@ -58,7 +58,7 @@ if 'pagina_actual' not in st.session_state:
 # --- RUTAS DE ARCHIVOS ---
 PATH_GP = "master_gp.csv"
 PATH_COSTOS = "master_costos.csv"
-PATH_VV = "master_vv.csv"  # Nueva ruta para VV
+PATH_VV = "master_vv.csv" 
 HISTORICO_FILE = "base_historica_bago.csv"
 
 # --- FUNCIONES DE SOPORTE ---
@@ -86,7 +86,7 @@ if st.session_state['pagina_actual'] == "inicio":
     st.markdown("<br><br>", unsafe_allow_html=True)
     st.markdown(f'<p class="welcome-text">{saludo_txt},</p>', unsafe_allow_html=True)
     st.markdown('<p class="main-title">Laboratorios Bagó</p>', unsafe_allow_html=True)
-    st.markdown("<h3 style='text-align:center; color:#555; font-weight:300; margin-bottom:60px;'>SISTEMA DE CONCILIACIÓN DE LOGÍSTICA</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align:center; color:#555; font-weight:300; margin-bottom:60px;'>SISTEMA DE CONCILIACIÓN LOGÍSTICA</h3>", unsafe_allow_html=True)
     
     _, col_l, col_r, _ = st.columns([6.5, 1.8, 1.8, 6.5])
     with col_l:
@@ -159,12 +159,10 @@ elif st.session_state['pagina_actual'] == "sistema":
 
                         st.subheader(f"📋 Resumen: {mes_sel}")
                         summary = res.pivot_table(index='GP', columns='TIPO', values='SUBTOTAL_NETO', aggfunc='sum').fillna(0)
-                        
-                        # INCLUIMOS VV EN EL RESUMEN POR SI ACASO, SIN DAÑAR MM Y MP
-                        for col in ['MM', 'MP', 'VV']:
+                        for col in ['MM', 'MP']:
                             if col not in summary.columns: summary[col] = 0.0
                         
-                        summary['SUBTOTAL'] = summary['MM'] + summary['MP'] + summary['VV']
+                        summary['SUBTOTAL'] = summary['MM'] + summary['MP']
                         summary['IVA 15%'] = summary['SUBTOTAL'] * 0.15
                         summary['TOTAL GENERAL'] = summary['SUBTOTAL'] + summary['IVA 15%']
                         
@@ -191,30 +189,22 @@ elif st.session_state['pagina_actual'] == "sistema":
             with f1: sel_gp = st.multiselect("GP", options=sorted(df_full['GP'].unique()))
             with f2: sel_tipo = st.multiselect("Tipo", options=sorted(df_full['TIPO'].unique()))
             with f3: sel_zona = st.multiselect("Zona", options=sorted(df_full['DESCRIPCIÓN ZONA'].unique()))
-
             df_v = df_full.copy()
             if sel_gp: df_v = df_v[df_v['GP'].isin(sel_gp)]
             if sel_tipo: df_v = df_v[df_v['TIPO'].isin(sel_tipo)]
             if sel_zona: df_v = df_v[df_v['DESCRIPCIÓN ZONA'].isin(sel_zona)]
-
-            k1, k2, k3, k4 = st.columns(4)
-            k1.metric("Bultos", f"{df_v['BULTOS'].sum():,.0f}")
-            k2.metric("Prep.", f"$ {df_v['TOTAL_PREPARACION'].sum():,.2f}")
-            k3.metric("Trans.", f"$ {df_v['TOTAL_TRANSPORTE'].sum():,.2f}")
-            k4.metric("Total Final", f"$ {df_v['TOTAL_FINAL'].sum():,.2f}")
-            st.divider()
             st.dataframe(df_v, use_container_width=True)
 
     with tabs[2]: # CONFIGURACIÓN
         st.header("⚙️ Maestros")
         ca, cb = st.columns(2)
         with ca:
-            ug = st.file_uploader("Cargar GP", type=['csv','xlsx'])
+            ug = st.file_uploader("Cargar Maestro GP", type=['csv','xlsx'], key="up_gp")
             if ug:
                 d = leer_archivo(ug)
                 if d is not None: d.to_csv(PATH_GP, index=False); st.success("GP OK")
         with cb:
-            uc = st.file_uploader("Cargar Costos", type=['csv','xlsx'])
+            uc = st.file_uploader("Cargar Maestro Costos", type=['csv','xlsx'], key="up_cost")
             if uc:
                 d = leer_archivo(uc)
                 if d is not None: d.to_csv(PATH_COSTOS, index=False); st.success("Costos OK")
@@ -223,56 +213,92 @@ elif st.session_state['pagina_actual'] == "sistema":
         st.header("🗄️ Historial")
         if os.path.exists(HISTORICO_FILE):
             df_h = pd.read_csv(HISTORICO_FILE)
-            for col in ['TOTAL_FINAL', 'BULTOS']: 
-                if col in df_h.columns: df_h[col] = pd.to_numeric(df_h[col], errors='coerce').fillna(0)
             opciones_mes = sorted([str(x) for x in df_h['MES_PROCESO'].dropna().unique()])
             if opciones_mes:
                 m_h = st.selectbox("Ver Mes:", opciones_mes)
-                df_mostrar = df_h[df_h['MES_PROCESO'] == m_h]
-                st.dataframe(df_mostrar, use_container_width=True)
-            else: st.info("No hay meses en el historial.")
-        else: st.info("Historial vacío.")
+                st.dataframe(df_h[df_h['MES_PROCESO'] == m_h], use_container_width=True)
 
 # ---------------------------------------------------------
-# PANTALLA 3: REPROGRAMA / MÓDULO VV (TOTALMENTE NUEVO)
+# PANTALLA 3: MÓDULO VV / REPROGRAMA (ESPEJO FUNCIONAL)
 # ---------------------------------------------------------
 elif st.session_state['pagina_actual'] == "reprograma":
     if st.sidebar.button("⬅️ Volver al Menú Principal"):
         st.session_state['pagina_actual'] = "inicio"
         st.rerun()
 
-    st.markdown(f'<p class="main-title" style="font-size: 3rem !important;">Módulo VV / Reprograma</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="main-title" style="font-size: 3.5rem !important;">Módulo VV / Reprograma</p>', unsafe_allow_html=True)
     
-    m_vv = cargar_maestro(PATH_VV)
+    m_gp = cargar_maestro(PATH_GP)
+    m_costos = cargar_maestro(PATH_COSTOS)
     
-    t_vv = st.tabs(["📥 Cargar Datos VV", "📋 Consultar Maestro VV"])
+    t_vv = st.tabs(["🚀 Liquidación VV", "🔍 Detalle VV", "⚙️ Configurar Maestro VV"])
 
-    with t_vv[0]:
-        st.info("Utilice esta sección para cargar la tabla específica de VV sin afectar el sistema de Extra Ciclos.")
-        archivo_vv = st.file_uploader("Subir Archivo de Reprogramas VV", type=['xlsx', 'xls', 'csv'])
-        
-        if archivo_vv:
-            df_vv = leer_archivo(archivo_vv)
-            if df_vv is not None:
-                df_vv['TIPO'] = "VV" # Forzamos el tipo
-                st.write("### Vista Previa de Datos a Cargar")
-                st.dataframe(df_vv.head())
-                
-                if st.button("✅ Guardar en Tabla VV"):
-                    df_vv.to_csv(PATH_VV, index=False)
-                    st.success("Maestro VV actualizado correctamente.")
-                    st.rerun()
-
-    with t_vv[1]:
-        if m_vv is not None:
-            st.markdown("### Maestro VV Actual")
-            st.metric("Total Registros VV", len(m_vv))
-            st.dataframe(m_vv, use_container_width=True)
-            
-            st.divider()
-            if st.button("🗑️ Eliminar todos los datos de VV"):
-                if os.path.exists(PATH_VV):
-                    os.remove(PATH_VV)
-                    st.rerun()
+    with t_vv[0]: # LIQUIDACIÓN VV
+        if m_gp is None or m_costos is None:
+            st.warning("⚠️ Los maestros GP y Costos de la pestaña Extra Ciclos son necesarios.")
         else:
-            st.info("La tabla VV está vacía.")
+            c1_v, c2_v = st.columns([1, 2])
+            with c1_v: mes_vv = st.selectbox("Mes VV", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], key="sel_mes_vv")
+            with c2_v: arch_vv = st.file_uploader("Subir Carga VV", type=['xlsx', 'xls', 'csv'], key="up_vv")
+
+            if arch_vv:
+                df_vv = leer_archivo(arch_vv)
+                if df_vv is not None:
+                    df_vv.columns = df_vv.columns.str.strip().str.upper()
+                    df_vv['CODIGO'] = df_vv['CODIGO'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+                    df_vv['DESCRIPCIÓN ZONA'] = df_vv['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
+                    df_vv['BULTOS'] = pd.to_numeric(df_vv['BULTOS'], errors='coerce').fillna(0)
+                    
+                    # Limpieza Maestro Costos
+                    m_costos_v = m_costos.copy()
+                    m_costos_v.columns = m_costos_v.columns.str.strip().str.upper()
+                    rn_v = {c: "P_PREP" for c in m_costos_v.columns if "PREP" in c}
+                    rn_v.update({c: "P_TRANS" for c in m_costos_v.columns if "TRANS" in c})
+                    rn_v.update({c: "DESCRIPCIÓN ZONA" for c in m_costos_v.columns if "ZONA" in c})
+                    m_costos_v = m_costos_v.rename(columns=rn_v)
+                    
+                    # Merge con Maestro GP y Maestro Costos
+                    res_vv = pd.merge(df_vv, m_gp[['CODIGO', 'GP', 'TIPO']], on='CODIGO', how='left')
+                    res_vv = pd.merge(res_vv, m_costos_v[['DESCRIPCIÓN ZONA', 'P_PREP', 'P_TRANS']], on='DESCRIPCIÓN ZONA', how='left')
+                    
+                    # Forzar tipo VV si no viene en el maestro o archivo
+                    res_vv['TIPO'] = "VV"
+
+                    if res_vv['P_PREP'].isna().any():
+                        st.error("🛑 Zonas faltantes en el maestro de costos.")
+                        st.write(res_vv[res_vv['P_PREP'].isna()]['DESCRIPCIÓN ZONA'].unique())
+                    else:
+                        res_vv['TOTAL_PREPARACION'] = res_vv['P_PREP'] * res_vv['BULTOS']
+                        res_vv['TOTAL_TRANSPORTE'] = res_vv['P_TRANS'] * res_vv['BULTOS']
+                        res_vv['SUBTOTAL_NETO'] = res_vv['TOTAL_PREPARACION'] + res_vv['TOTAL_TRANSPORTE']
+                        res_vv['IVA_15'] = res_vv['SUBTOTAL_NETO'] * 0.15
+                        res_vv['TOTAL_FINAL'] = res_vv['SUBTOTAL_NETO'] + res_vv['IVA_15']
+
+                        st.subheader(f"📊 Resumen VV: {mes_vv}")
+                        sum_vv = res_vv.pivot_table(index='GP', values=['BULTOS', 'SUBTOTAL_NETO'], aggfunc='sum').reset_index()
+                        sum_vv['IVA 15%'] = sum_vv['SUBTOTAL_NETO'] * 0.15
+                        sum_vv['TOTAL GENERAL'] = sum_vv['SUBTOTAL_NETO'] + sum_vv['IVA 15%']
+                        
+                        st.table(sum_vv.style.format(subset=['BULTOS', 'SUBTOTAL_NETO', 'IVA 15%', 'TOTAL GENERAL'], formatter="{:,.2f}"))
+                        st.download_button("📥 Descargar Reporte VV", format_excel(sum_vv), f"Reporte_VV_{mes_vv}.xlsx")
+                        
+                        st.session_state['res_vv_actual'] = res_vv
+
+    with t_vv[1]: # DETALLE VV
+        if 'res_vv_actual' in st.session_state:
+            st.dataframe(st.session_state['res_vv_actual'], use_container_width=True)
+        else:
+            st.info("No hay datos procesados en esta sesión.")
+
+    with t_vv[2]: # CONFIGURAR MAESTRO VV
+        st.header("⚙️ Gestión de Datos VV")
+        archivo_m_vv = st.file_uploader("Subir Maestro Base VV (Opcional)", type=['csv','xlsx'], key="up_m_vv")
+        if archivo_m_vv:
+            d_vv = leer_archivo(archivo_m_vv)
+            if d_vv is not None: d_vv.to_csv(PATH_VV, index=False); st.success("Maestro VV Guardado")
+        
+        if os.path.exists(PATH_VV):
+            st.write("### Datos actuales en Maestro VV")
+            st.dataframe(pd.read_csv(PATH_VV).head())
+            if st.button("🗑️ Vaciar Tabla VV"):
+                os.remove(PATH_VV); st.rerun()
