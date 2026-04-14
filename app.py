@@ -40,15 +40,6 @@ st.markdown(f"""
     [data-testid="stSidebar"] {{ background-color: white !important; border-right: 1px solid #eee; }}
     [data-testid="stTable"] thead tr th {{ background-color: #2C3E50 !important; color: white !important; font-weight: bold !important; }}
     div[data-testid="stMetric"] {{ background: white !important; border-radius: 20px !important; padding: 20px !important; border-left: 8px solid {MAGENTA_BAGO} !important; box-shadow: 0 10px 20px rgba(0,0,0,0.04) !important; }}
-    
-    .small-btn button {{
-        height: auto !important;
-        padding: 5px 15px !important;
-        font-size: 0.8rem !important;
-        background: #ff4b4b22 !important;
-        color: #ff4b4b !important;
-        border: 1px solid #ff4b4b !important;
-    }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -123,37 +114,30 @@ elif st.session_state['pagina_actual'] == "sistema":
             if archivo:
                 df_c = leer_archivo(archivo)
                 if df_c is not None:
-                    # Limpieza Carga
                     df_c.columns = df_c.columns.str.strip().str.upper()
                     df_c['CODIGO'] = df_c['CODIGO'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                     df_c['DESCRIPCIÓN ZONA'] = df_c['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
                     df_c['BULTOS'] = pd.to_numeric(df_c['BULTOS'], errors='coerce').fillna(0)
                     
-                    # Estandarizar Maestro Costos ANTES de drop_duplicates para evitar KeyError
                     m_costos_clean = m_costos.copy()
                     m_costos_clean.columns = m_costos_clean.columns.str.strip().str.upper()
-                    rn = {{c: "P_PREP" for c in m_costos_clean.columns if "PREP" in c}}
-                    rn.update({{c: "P_TRANS" for c in m_costos_clean.columns if "TRANS" in c}})
-                    rn.update({{c: "DESCRIPCIÓN ZONA" for c in m_costos_clean.columns if "ZONA" in c}})
+                    rn = {c: "P_PREP" for c in m_costos_clean.columns if "PREP" in c}
+                    rn.update({c: "P_TRANS" for c in m_costos_clean.columns if "TRANS" in c})
+                    rn.update({c: "DESCRIPCIÓN ZONA" for c in m_costos_clean.columns if "ZONA" in c})
                     m_costos_clean = m_costos_clean.rename(columns=rn)
                     m_costos_clean = m_costos_clean.drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
                     m_costos_clean['P_PREP'] = pd.to_numeric(m_costos_clean['P_PREP'], errors='coerce').fillna(0)
                     m_costos_clean['P_TRANS'] = pd.to_numeric(m_costos_clean['P_TRANS'], errors='coerce').fillna(0)
-                    m_costos_clean['DESCRIPCIÓN ZONA'] = m_costos_clean['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
 
-                    # Limpieza Maestro GP
                     col_id = [c for c in m_gp.columns if 'CODIGO' in c.upper()][0]
                     m_gp_clean = m_gp.copy().drop_duplicates(subset=[col_id])
                     m_gp_clean[col_id] = m_gp_clean[col_id].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                     
-                    # Cruce
                     res = pd.merge(df_c, m_gp_clean[[col_id, 'GP', 'TIPO']], left_on='CODIGO', right_on=col_id, how='left')
                     res = pd.merge(res, m_costos_clean[['DESCRIPCIÓN ZONA', 'P_PREP', 'P_TRANS']], on='DESCRIPCIÓN ZONA', how='left')
 
                     if res['GP'].isna().any() or res['P_PREP'].isna().any():
                         st.error("🛑 Faltan datos en maestros.")
-                        st.write("Cod. Faltantes:", res[res['GP'].isna()]['CODIGO'].unique())
-                        st.write("Zonas Faltantes:", res[res['P_PREP'].isna()]['DESCRIPCIÓN ZONA'].unique())
                     else:
                         res['TOTAL_PREPARACION'] = res['P_PREP'] * res['BULTOS']
                         res['TOTAL_TRANSPORTE'] = res['P_TRANS'] * res['BULTOS']
@@ -172,7 +156,6 @@ elif st.session_state['pagina_actual'] == "sistema":
                         summary['TOTAL'] = summary.sum(axis=1)
                         st.table(summary.style.format("{:,.2f}"))
                         st.session_state['res_actual'] = res
-                        st.session_state['mes_actual'] = mes_sel
 
     with tabs[2]: # CONFIG
         ca, cb = st.columns(2)
@@ -213,23 +196,18 @@ elif st.session_state['pagina_actual'] == "reprograma":
                     df_vv['DESCRIPCIÓN ZONA'] = df_vv['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
                     df_vv['BULTOS'] = pd.to_numeric(df_vv['BULTOS'], errors='coerce').fillna(0)
                     
-                    # Estandarizar Maestro Costos VV
                     mct_v = m_costos_vv.copy()
                     mct_v.columns = mct_v.columns.str.strip().str.upper()
-                    rn_v = {{c: "P_PREP" for c in mct_v.columns if "PREP" in c}}
-                    rn_v.update({{c: "P_TRANS" for c in mct_v.columns if "TRANS" in c}})
-                    rn_v.update({{c: "DESCRIPCIÓN ZONA" for c in mct_v.columns if "ZONA" in c}})
+                    rn_v = {c: "P_PREP" for c in mct_v.columns if "PREP" in c}
+                    rn_v.update({c: "P_TRANS" for c in mct_v.columns if "TRANS" in c})
+                    rn_v.update({c: "DESCRIPCIÓN ZONA" for c in mct_v.columns if "ZONA" in c})
                     mct_v = mct_v.rename(columns=rn_v)
                     mct_v = mct_v.drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
-                    mct_v['P_PREP'] = pd.to_numeric(mct_v['P_PREP'], errors='coerce').fillna(0)
-                    mct_v['P_TRANS'] = pd.to_numeric(mct_v['P_TRANS'], errors='coerce').fillna(0)
                     
-                    # Maestro GP VV
                     id_vv = [c for c in m_gp_vv.columns if 'CODIGO' in c.upper()][0]
                     mgp_v = m_gp_vv.copy().drop_duplicates(subset=[id_vv])
                     mgp_v[id_vv] = mgp_v[id_vv].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                     
-                    # Merge
                     res_v = pd.merge(df_vv, mgp_v[[id_vv, 'GP', 'TIPO']], left_on='CODIGO', right_on=id_vv, how='left')
                     res_v = pd.merge(res_v, mct_v[['DESCRIPCIÓN ZONA', 'P_PREP', 'P_TRANS']], on='DESCRIPCIÓN ZONA', how='left')
                     
@@ -241,14 +219,14 @@ elif st.session_state['pagina_actual'] == "reprograma":
 
                     st.subheader(f"📊 Resumen VV: {mes_v}")
                     kv1, kv2, kv3, kv4 = st.columns(4)
-                    kv1.metric("Bultos", f"{{res_v['BULTOS'].sum():,.0f}}")
-                    kv2.metric("Prep.", f"$ {{res_v['TOTAL_PREPARACION'].sum():,.2f}}")
-                    kv3.metric("Trans.", f"$ {{res_v['TOTAL_TRANSPORTE'].sum():,.2f}}")
-                    kv4.metric("Total Final", f"$ {{res_v['TOTAL_FINAL'].sum():,.2f}}")
+                    kv1.metric("Bultos", f"{res_v['BULTOS'].sum():,.0f}")
+                    kv2.metric("Prep.", f"$ {res_v['TOTAL_PREPARACION'].sum():,.2f}")
+                    kv3.metric("Trans.", f"$ {res_v['TOTAL_TRANSPORTE'].sum():,.2f}")
+                    kv4.metric("Total Final", f"$ {res_v['TOTAL_FINAL'].sum():,.2f}")
                     
                     sum_v = res_v.pivot_table(index='GP', columns='TIPO', values='SUBTOTAL_NETO', aggfunc='sum').fillna(0)
                     sum_v['TOTAL'] = sum_v.sum(axis=1)
-                    st.table(sum_v.style.format("{{:,.2f}}"))
+                    st.table(sum_v.style.format("{:,.2f}"))
                     st.session_state['res_vv'] = res_v
 
     with tabs_v[2]: # CONFIG VV
