@@ -161,7 +161,7 @@ elif st.session_state['pagina_actual'] == "sistema":
                         res['TOTAL_FINAL'] = res['SUBTOTAL_NETO'] + res['IVA_15']
 
                         st.subheader(f"📋 Resumen: {mes_sel}")
-                        summary = res.pivot_table(index='QUIEN PAGA', columns='TIPO', values='SUBTOTAL_NETO', aggfunc='sum').fillna(0)
+                        summary = res.pivot_table(index='GP', columns='TIPO', values='SUBTOTAL_NETO', aggfunc='sum').fillna(0)
                         for col in ['MM', 'MP']:
                             if col not in summary.columns: summary[col] = 0.0
                         
