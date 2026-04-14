@@ -173,7 +173,7 @@ elif st.session_state['pagina_actual'] == "sistema":
                         st.table(summary_f.style.format(subset=summary_f.columns[1:], formatter="{:,.2f}"))
                         st.download_button("📥 Descargar Resumen", format_excel(summary_f), f"Resumen_{mes_sel}.xlsx")
 
-                        if st.button("💾 Guardar en Historial (Anti-Duplicados)"):
+                        if st.button("💾 Guardar en Historial"):
                             res['MES_PROCESO'] = mes_sel
                             if os.path.exists(HISTORICO_FILE):
                                 df_h_old = pd.read_csv(HISTORICO_FILE)
@@ -207,7 +207,7 @@ elif st.session_state['pagina_actual'] == "sistema":
             k4.metric("Total Final", f"$ {df_v['TOTAL_FINAL'].sum():,.2f}")
             
             st.divider()
-            st.download_button("📥 Descargar Detalle Filtrado", format_excel(df_v), f"Detalle_{st.session_state['mes_actual']}.xlsx")
+            st.download_button("📥 Descargar Detalle ", format_excel(df_v), f"Detalle_{st.session_state['mes_actual']}.xlsx")
             st.dataframe(df_v, use_container_width=True)
 
     with tabs[2]: # CONFIGURACIÓN
