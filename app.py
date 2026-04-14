@@ -171,7 +171,7 @@ elif st.session_state['pagina_actual'] == "sistema":
                         
                         summary_f = pd.concat([summary.reset_index(), pd.DataFrame([{'GP': '--- TOTALES ---', **summary.sum()}])], ignore_index=True)
                         st.table(summary_f.style.format(subset=summary_f.columns[1:], formatter="{:,.2f}"))
-                        st.download_button("📥 Descargar Resumen", format_excel(summary_f), f"Resumen_{mes_sel}.xlsx")
+                        st.download_button("📥 DESCARGAR", format_excel(summary_f), f"Resumen_{mes_sel}.xlsx")
 
                         if st.button("💾 Guardar en Historial"):
                             res['MES_PROCESO'] = mes_sel
@@ -189,11 +189,11 @@ elif st.session_state['pagina_actual'] == "sistema":
     with tabs[1]: # DETALLE ACTUAL
         if 'res_actual' in st.session_state:
             df_full = st.session_state['res_actual']
-            st.markdown("### 🔍 Filtros")
+            st.markdown("### 🔍 FILTROS")
             f1, f2, f3 = st.columns(3)
-            with f1: sel_gp = st.multiselect("GP", options=sorted(df_full['GP'].unique()))
-            with f2: sel_tipo = st.multiselect("Tipo", options=sorted(df_full['TIPO'].unique()))
-            with f3: sel_zona = st.multiselect("Zona", options=sorted(df_full['DESCRIPCIÓN ZONA'].unique()))
+            with f1: sel_gp = st.multiselect("QUIEN PAGA", options=sorted(df_full['GP'].unique()))
+            with f2: sel_tipo = st.multiselect("TIPO", options=sorted(df_full['TIPO'].unique()))
+            with f3: sel_zona = st.multiselect("ZONA", options=sorted(df_full['DESCRIPCIÓN ZONA'].unique()))
 
             df_v = df_full.copy()
             if sel_gp: df_v = df_v[df_v['GP'].isin(sel_gp)]
@@ -202,8 +202,8 @@ elif st.session_state['pagina_actual'] == "sistema":
 
             k1, k2, k3, k4 = st.columns(4)
             k1.metric("BULTOS", f"{df_v['BULTOS'].sum():,.0f}")
-            k2.metric("PREPARACION.", f"$ {df_v['TOTAL_PREPARACION'].sum():,.2f}")
-            k3.metric("TRANSPORTE.", f"$ {df_v['TOTAL_TRANSPORTE'].sum():,.2f}")
+            k2.metric("PREPARACION", f"$ {df_v['TOTAL_PREPARACION'].sum():,.2f}")
+            k3.metric("TRANSPORTE", f"$ {df_v['TOTAL_TRANSPORTE'].sum():,.2f}")
             k4.metric("TOTAL A PAGAR", f"$ {df_v['TOTAL_FINAL'].sum():,.2f}")
             
             st.divider()
