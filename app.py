@@ -137,8 +137,8 @@ elif st.session_state['pagina_actual'] == "sistema":
                     
                     m_costos_clean = m_costos.copy()
                     m_costos_clean.columns = m_costos_clean.columns.str.strip().str.upper()
-                    renames = {c: "P_PREP" for c in m_costos_clean.columns if "PREP" in c}
-                    renames.update({c: "P_TRANS" for c in m_costos_clean.columns if "TRANS" in c})
+                    renames = {c: "P_PREP" for c in m_costos_clean.columns if "PREPARACION" in c}
+                    renames.update({c: "P_TRANS" for c in m_costos_clean.columns if "TRANSPORTE" in c})
                     renames.update({c: "DESCRIPCIÓN ZONA" for c in m_costos_clean.columns if "ZONA" in c})
                     m_costos_clean = m_costos_clean.rename(columns=renames)
                     m_costos_clean['DESCRIPCIÓN ZONA'] = m_costos_clean['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
