@@ -416,10 +416,10 @@ elif st.session_state['pagina_actual'] == "sistema_reprograma":
 st.markdown("""
     <style>
     .btn-chico button {
-        height: 30px !important;
-        width: 50px !important;
+        height: 25px !important;
+        width: 25px !important;
         font-size: 0.9rem !important;
-        margin-top: 40px !important;
+        margin-top: 60px !important;
     }
     </style>
     """, unsafe_allow_html=True)
