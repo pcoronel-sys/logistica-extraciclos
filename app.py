@@ -261,7 +261,7 @@ elif st.session_state['pagina_actual'] == "sistema_reprograma":
     m_gp_r = cargar_maestro(PATH_GP_REPRO)
     m_costos_r = cargar_maestro(PATH_COSTOS_REPRO)
 
-    tabs = st.tabs(["🚀 Liquidación VV", "🔍 Detalle VV", "⚙️ Configurar Reprograma", "🗄️ Historial VV"])
+    tabs = st.tabs(["🚀 Resumen VV", "🔍 Detalle VV", "⚙️ Configurar Reprograma", "🗄️ Historial VV"])
 
     with tabs[0]: # TAB 0: LIQUIDACIÓN VV
         if m_gp_r is None or m_costos_r is None: 
@@ -351,7 +351,7 @@ elif st.session_state['pagina_actual'] == "sistema_reprograma":
         if 'res_repro' in st.session_state:
             df_full_r = st.session_state['res_repro']
             
-            st.markdown("### 🔍  Detallade Visita Virtual")
+            st.markdown("### 🔍  Detalle Visita Virtual")
             f1, f2 = st.columns(2)
             with f1: sel_gp_r = st.multiselect("Filtrar por GP", options=sorted(df_full_r['GP'].unique()), key="f_gp_r")
             with f2: sel_zona_r = st.multiselect("Filtrar por Zona", options=sorted(df_full_r['DESCRIPCIÓN ZONA'].unique()), key="f_zona_r")
