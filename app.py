@@ -5,7 +5,7 @@ import io
 from datetime import datetime, timedelta
 
 # 1. CONFIGURACIÓN DE PÁGINA
-st.set_page_config(page_title="Laboratorios Bagó - Conciliación Extra Ciclos", layout="wide", page_icon="🧪")
+st.set_page_config(page_title="Laboratorios Bagó - Conciliación", layout="wide", page_icon="🧪")
 
 # --- DISEÑO ESTÉTICO UI/UX PRO (ESTILOS BAGO) ---
 MAGENTA_BAGO = "#C7006A" 
@@ -55,8 +55,10 @@ st.markdown(f"""
 if 'pagina_actual' not in st.session_state:
     st.session_state['pagina_actual'] = "inicio"
 
+# --- RUTAS DE ARCHIVOS ---
 PATH_GP = "master_gp.csv"
 PATH_COSTOS = "master_costos.csv"
+PATH_VV = "master_vv.csv"  # Nueva ruta para VV
 HISTORICO_FILE = "base_historica_bago.csv"
 
 # --- FUNCIONES DE SOPORTE ---
@@ -84,7 +86,7 @@ if st.session_state['pagina_actual'] == "inicio":
     st.markdown("<br><br>", unsafe_allow_html=True)
     st.markdown(f'<p class="welcome-text">{saludo_txt},</p>', unsafe_allow_html=True)
     st.markdown('<p class="main-title">Laboratorios Bagó</p>', unsafe_allow_html=True)
-    st.markdown("<h3 style='text-align:center; color:#555; font-weight:300; margin-bottom:60px;'>SISTEMA DE CONCILIACION DE EXTRA CICLOS </h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align:center; color:#555; font-weight:300; margin-bottom:60px;'>SISTEMA DE CONCILIACIÓN DE LOGÍSTICA</h3>", unsafe_allow_html=True)
     
     _, col_l, col_r, _ = st.columns([6.5, 1.8, 1.8, 6.5])
     with col_l:
@@ -92,11 +94,12 @@ if st.session_state['pagina_actual'] == "inicio":
             st.session_state['pagina_actual'] = "sistema" 
             st.rerun()
     with col_r:
-        if st.button("\n REPROGRAMA"):
-            st.toast("Módulo en desarrollo...", icon="⚠️")
+        if st.button("\n\n VV / REPROGRAMA"):
+            st.session_state['pagina_actual'] = "reprograma"
+            st.rerun()
 
 # ---------------------------------------------------------
-# PANTALLA 2: SISTEMA PRINCIPAL
+# PANTALLA 2: SISTEMA PRINCIPAL (EXTRA CICLOS)
 # ---------------------------------------------------------
 elif st.session_state['pagina_actual'] == "sistema":
     if st.sidebar.button("⬅️ Volver al Menú Principal"):
@@ -124,13 +127,11 @@ elif st.session_state['pagina_actual'] == "sistema":
                     df_c['DESCRIPCIÓN ZONA'] = df_c['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
                     df_c['BULTOS'] = pd.to_numeric(df_c['BULTOS'], errors='coerce').fillna(0)
                     
-                    # Limpieza Maestro GP
                     col_id_gp = [c for c in m_gp.columns if 'CODIGO' in c.upper()][0]
                     m_gp_clean = m_gp.copy()
                     m_gp_clean[col_id_gp] = m_gp_clean[col_id_gp].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                     m_gp_clean = m_gp_clean.drop_duplicates(subset=[col_id_gp])
                     
-                    # Limpieza Maestro Costos
                     m_costos_clean = m_costos.copy()
                     m_costos_clean.columns = m_costos_clean.columns.str.strip().str.upper()
                     renames = {c: "P_PREP" for c in m_costos_clean.columns if "PREP" in c}
@@ -142,7 +143,6 @@ elif st.session_state['pagina_actual'] == "sistema":
                     m_costos_clean['P_TRANS'] = pd.to_numeric(m_costos_clean['P_TRANS'], errors='coerce').fillna(0)
                     m_costos_clean = m_costos_clean.drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
                     
-                    # Merge
                     res = pd.merge(df_c, m_gp_clean[[col_id_gp, 'GP', 'TIPO']], left_on='CODIGO', right_on=col_id_gp, how='left')
                     res = pd.merge(res, m_costos_clean[['DESCRIPCIÓN ZONA', 'P_PREP', 'P_TRANS']], on='DESCRIPCIÓN ZONA', how='left')
 
@@ -159,33 +159,31 @@ elif st.session_state['pagina_actual'] == "sistema":
 
                         st.subheader(f"📋 Resumen: {mes_sel}")
                         summary = res.pivot_table(index='GP', columns='TIPO', values='SUBTOTAL_NETO', aggfunc='sum').fillna(0)
-                        for col in ['MM', 'MP']:
+                        
+                        # INCLUIMOS VV EN EL RESUMEN POR SI ACASO, SIN DAÑAR MM Y MP
+                        for col in ['MM', 'MP', 'VV']:
                             if col not in summary.columns: summary[col] = 0.0
                         
-                        summary['SUBTOTAL'] = summary['MM'] + summary['MP']
+                        summary['SUBTOTAL'] = summary['MM'] + summary['MP'] + summary['VV']
                         summary['IVA 15%'] = summary['SUBTOTAL'] * 0.15
                         summary['TOTAL GENERAL'] = summary['SUBTOTAL'] + summary['IVA 15%']
                         
                         summary_f = pd.concat([summary.reset_index(), pd.DataFrame([{'GP': '--- TOTALES ---', **summary.sum()}])], ignore_index=True)
                         st.table(summary_f.style.format(subset=summary_f.columns[1:], formatter="{:,.2f}"))
-                        
                         st.download_button("📥 Descargar Resumen", format_excel(summary_f), f"Resumen_{mes_sel}.xlsx")
 
-                        if st.button("💾 Guardar en Historial (Anti-Duplicados)"):
+                        if st.button("💾 Guardar en Historial"):
                             res['MES_PROCESO'] = mes_sel
                             if os.path.exists(HISTORICO_FILE):
-                                df_h_old = pd.read_csv(HISTORICO_FILE)
-                                # Borramos el mes si ya existe para no duplicar
-                                df_h_old = df_h_old[df_h_old['MES_PROCESO'] != mes_sel]
+                                df_h_old = pd.read_csv(HISTORICO_FILE); df_h_old = df_h_old[df_h_old['MES_PROCESO'] != mes_sel]
                                 pd.concat([df_h_old, res]).to_csv(HISTORICO_FILE, index=False)
-                            else:
-                                res.to_csv(HISTORICO_FILE, index=False)
+                            else: res.to_csv(HISTORICO_FILE, index=False)
                             st.success("Guardado correctamente.")
 
                         st.session_state['res_actual'] = res
                         st.session_state['mes_actual'] = mes_sel
 
-    with tabs[1]: # DETALLE ACTUAL (FILTROS Y KPIs)
+    with tabs[1]: # DETALLE ACTUAL
         if 'res_actual' in st.session_state:
             df_full = st.session_state['res_actual']
             st.markdown("### 🔍 Filtros")
@@ -204,9 +202,7 @@ elif st.session_state['pagina_actual'] == "sistema":
             k2.metric("Prep.", f"$ {df_v['TOTAL_PREPARACION'].sum():,.2f}")
             k3.metric("Trans.", f"$ {df_v['TOTAL_TRANSPORTE'].sum():,.2f}")
             k4.metric("Total Final", f"$ {df_v['TOTAL_FINAL'].sum():,.2f}")
-            
             st.divider()
-            st.download_button("📥 Descargar Detalle Filtrado", format_excel(df_v), f"Detalle_{st.session_state['mes_actual']}.xlsx")
             st.dataframe(df_v, use_container_width=True)
 
     with tabs[2]: # CONFIGURACIÓN
@@ -223,40 +219,60 @@ elif st.session_state['pagina_actual'] == "sistema":
                 d = leer_archivo(uc)
                 if d is not None: d.to_csv(PATH_COSTOS, index=False); st.success("Costos OK")
 
-    with tabs[3]: # HISTORIAL (CORREGIDO)
+    with tabs[3]: # HISTORIAL
         st.header("🗄️ Historial")
         if os.path.exists(HISTORICO_FILE):
             df_h = pd.read_csv(HISTORICO_FILE)
-            
-            # BLINDAJE DE TIPOS DE DATOS
-            for col in ['TOTAL_FINAL', 'BULTOS', 'TOTAL_PREPARACION', 'TOTAL_TRANSPORTE']:
-                if col in df_h.columns:
-                    df_h[col] = pd.to_numeric(df_h[col], errors='coerce').fillna(0)
-            
+            for col in ['TOTAL_FINAL', 'BULTOS']: 
+                if col in df_h.columns: df_h[col] = pd.to_numeric(df_h[col], errors='coerce').fillna(0)
             opciones_mes = sorted([str(x) for x in df_h['MES_PROCESO'].dropna().unique()])
-            
             if opciones_mes:
                 m_h = st.selectbox("Ver Mes:", opciones_mes)
                 df_mostrar = df_h[df_h['MES_PROCESO'] == m_h]
-                
-                # KPIs del Historial
-                h1, h2, h3 = st.columns(3)
-                h1.metric("Bultos Históricos", f"{df_mostrar['BULTOS'].sum():,.0f}")
-                h2.metric("Total Facturado", f"$ {df_mostrar['TOTAL_FINAL'].sum():,.2f}")
-                h3.metric("Registros", len(df_mostrar))
-
                 st.dataframe(df_mostrar, use_container_width=True)
+            else: st.info("No hay meses en el historial.")
+        else: st.info("Historial vacío.")
+
+# ---------------------------------------------------------
+# PANTALLA 3: REPROGRAMA / MÓDULO VV (TOTALMENTE NUEVO)
+# ---------------------------------------------------------
+elif st.session_state['pagina_actual'] == "reprograma":
+    if st.sidebar.button("⬅️ Volver al Menú Principal"):
+        st.session_state['pagina_actual'] = "inicio"
+        st.rerun()
+
+    st.markdown(f'<p class="main-title" style="font-size: 3rem !important;">Módulo VV / Reprograma</p>', unsafe_allow_html=True)
+    
+    m_vv = cargar_maestro(PATH_VV)
+    
+    t_vv = st.tabs(["📥 Cargar Datos VV", "📋 Consultar Maestro VV"])
+
+    with t_vv[0]:
+        st.info("Utilice esta sección para cargar la tabla específica de VV sin afectar el sistema de Extra Ciclos.")
+        archivo_vv = st.file_uploader("Subir Archivo de Reprogramas VV", type=['xlsx', 'xls', 'csv'])
+        
+        if archivo_vv:
+            df_vv = leer_archivo(archivo_vv)
+            if df_vv is not None:
+                df_vv['TIPO'] = "VV" # Forzamos el tipo
+                st.write("### Vista Previa de Datos a Cargar")
+                st.dataframe(df_vv.head())
                 
-                st.markdown("<br>", unsafe_allow_html=True)
-                col_b, _ = st.columns([1, 4])
-                with col_b:
-                    st.markdown('<div class="small-btn">', unsafe_allow_html=True)
-                    if st.button(f"🗑️ Eliminar historial de {m_h}", key="del_hist"):
-                        df_h = df_h[df_h['MES_PROCESO'] != m_h]
-                        df_h.to_csv(HISTORICO_FILE, index=False)
-                        st.rerun()
-                    st.markdown('</div>', unsafe_allow_html=True)
-            else:
-                st.info("No hay meses válidos en el historial.")
+                if st.button("✅ Guardar en Tabla VV"):
+                    df_vv.to_csv(PATH_VV, index=False)
+                    st.success("Maestro VV actualizado correctamente.")
+                    st.rerun()
+
+    with t_vv[1]:
+        if m_vv is not None:
+            st.markdown("### Maestro VV Actual")
+            st.metric("Total Registros VV", len(m_vv))
+            st.dataframe(m_vv, use_container_width=True)
+            
+            st.divider()
+            if st.button("🗑️ Eliminar todos los datos de VV"):
+                if os.path.exists(PATH_VV):
+                    os.remove(PATH_VV)
+                    st.rerun()
         else:
-            st.info("Archivo historial no encontrado.")
+            st.info("La tabla VV está vacía.")
