@@ -426,10 +426,10 @@ if st.session_state['pagina_actual'] != "inicio":
         """, unsafe_allow_html=True)
 
     # Ajuste de columnas para pegarlo a la derecha
-    cols = st.columns([8.5, 1.5]) 
+    cols = st.columns([50, 1.5]) 
     with cols[1]:
         st.markdown('<div class="btn-derecha">', unsafe_allow_html=True)
-        if st.button("🏠 INICIO", key="btn_inicio_dinamico"):
+        if st.button("🏠", key="btn_inicio_dinamico"):
             st.session_state['pagina_actual'] = "inicio"
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
