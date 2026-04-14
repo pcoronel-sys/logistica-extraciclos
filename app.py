@@ -112,7 +112,7 @@ elif st.session_state['pagina_actual'] == "sistema":
     m_gp = cargar_maestro(PATH_GP)
     m_costos = cargar_maestro(PATH_COSTOS)
 
-    tabs = st.tabs(["🚀 Liquidación Mensual", "🔍 Detalle Actual", "⚙️ Configurar Maestros", "🗄️ Historial"])
+    tabs = st.tabs(["🚀 RESUMEN MENSUAL", "🔍 DETALLE ACTUAL", "⚙️ CONFIGURAR MAESTROS", "🗄️ HISTORIAL"])
 
     with tabs[0]: # LIQUIDACIÓN
         if m_gp is None or m_costos is None: 
@@ -161,7 +161,7 @@ elif st.session_state['pagina_actual'] == "sistema":
                         res['TOTAL_FINAL'] = res['SUBTOTAL_NETO'] + res['IVA_15']
 
                         st.subheader(f"📋 Resumen: {mes_sel}")
-                        summary = res.pivot_table(index='GP', columns='TIPO', values='SUBTOTAL_NETO', aggfunc='sum').fillna(0)
+                        summary = res.pivot_table(index='QUIEN PAGA', columns='TIPO', values='SUBTOTAL_NETO', aggfunc='sum').fillna(0)
                         for col in ['MM', 'MP']:
                             if col not in summary.columns: summary[col] = 0.0
                         
