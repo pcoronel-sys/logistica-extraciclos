@@ -201,10 +201,10 @@ elif st.session_state['pagina_actual'] == "sistema":
             if sel_zona: df_v = df_v[df_v['DESCRIPCIÓN ZONA'].isin(sel_zona)]
 
             k1, k2, k3, k4 = st.columns(4)
-            k1.metric("Bultos", f"{df_v['BULTOS'].sum():,.0f}")
-            k2.metric("Prep.", f"$ {df_v['TOTAL_PREPARACION'].sum():,.2f}")
-            k3.metric("Trans.", f"$ {df_v['TOTAL_TRANSPORTE'].sum():,.2f}")
-            k4.metric("Total Final", f"$ {df_v['TOTAL_FINAL'].sum():,.2f}")
+            k1.metric("BULTOS", f"{df_v['BULTOS'].sum():,.0f}")
+            k2.metric("PREPARACION.", f"$ {df_v['TOTAL_PREPARACION'].sum():,.2f}")
+            k3.metric("TRANSPORTE.", f"$ {df_v['TOTAL_TRANSPORTE'].sum():,.2f}")
+            k4.metric("TOTAL A PAGAR", f"$ {df_v['TOTAL_FINAL'].sum():,.2f}")
             
             st.divider()
             st.download_button("📥 Descargar Detalle ", format_excel(df_v), f"Detalle_{st.session_state['mes_actual']}.xlsx")
@@ -362,9 +362,9 @@ elif st.session_state['pagina_actual'] == "sistema_reprograma":
 
             # KPIs DESGLOSADOS (Mismo estilo que Extra Ciclos)
             k1, k2, k3, k4, k5 = st.columns(5)
-            k1.metric("Bultos", f"{df_v_r['BULTOS'].sum():,.0f}")
-            k2.metric("Preparación", f"$ {df_v_r['TOTAL_PREPARACION'].sum():,.2f}")
-            k3.metric("Transporte", f"$ {df_v_r['TOTAL_TRANSPORTE'].sum():,.2f}")
+            k1.metric("BULTOS", f"{df_v_r['BULTOS'].sum():,.0f}")
+            k2.metric("PREPARACION", f"$ {df_v_r['TOTAL_PREPARACION'].sum():,.2f}")
+            k3.metric("TRANSPORTE", f"$ {df_v_r['TOTAL_TRANSPORTE'].sum():,.2f}")
             k4.metric("IVA 15%", f"$ {df_v_r['IVA_15'].sum():,.2f}")
             k5.metric("Total Final", f"$ {df_v_r['TOTAL_FINAL'].sum():,.2f}")
             
