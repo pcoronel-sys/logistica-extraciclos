@@ -86,7 +86,7 @@ if st.session_state['pagina_actual'] == "inicio":
     st.markdown("<br><br>", unsafe_allow_html=True)
     st.markdown(f'<p class="welcome-text">{saludo_txt},</p>', unsafe_allow_html=True)
     st.markdown('<p class="main-title">Laboratorios Bagó</p>', unsafe_allow_html=True)
-    st.markdown("<h3 style='text-align:center; color:#555; font-weight:300; margin-bottom:60px;'>SISTEMA DE CONCILIACION DE EXTRA CICLOS </h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align:center; color:#555; font-weight:300; margin-bottom:60px;'>SISTEMA DE CONCILIACIÓN LOGÍSTICA</h3>", unsafe_allow_html=True)
     
     _, col_l, col_r, _ = st.columns([6.5, 1.8, 1.8, 6.5])
     with col_l:
@@ -99,7 +99,7 @@ if st.session_state['pagina_actual'] == "inicio":
             st.rerun()
 
 # ---------------------------------------------------------
-# PANTALLA 2: SISTEMA PRINCIPAL (ORIGINAL)
+# PANTALLA 2: EXTRA CICLOS (SIN TOCAR NADA)
 # ---------------------------------------------------------
 elif st.session_state['pagina_actual'] == "sistema":
     if st.sidebar.button("⬅️ Volver al Menú Principal"):
@@ -134,10 +134,10 @@ elif st.session_state['pagina_actual'] == "sistema":
                     
                     m_costos_clean = m_costos.copy()
                     m_costos_clean.columns = m_costos_clean.columns.str.strip().str.upper()
-                    rn_exc = {c: "P_PREP" for c in m_costos_clean.columns if "PREP" in c}
-                    rn_exc.update({c: "P_TRANS" for c in m_costos_clean.columns if "TRANS" in c})
-                    rn_exc.update({c: "DESCRIPCIÓN ZONA" for c in m_costos_clean.columns if "ZONA" in c})
-                    m_costos_clean = m_costos_clean.rename(columns=rn_exc)
+                    renames = {c: "P_PREP" for c in m_costos_clean.columns if "PREP" in c}
+                    renames.update({c: "P_TRANS" for c in m_costos_clean.columns if "TRANS" in c})
+                    renames.update({c: "DESCRIPCIÓN ZONA" for c in m_costos_clean.columns if "ZONA" in c})
+                    m_costos_clean = m_costos_clean.rename(columns=renames)
                     m_costos_clean['DESCRIPCIÓN ZONA'] = m_costos_clean['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
                     m_costos_clean['P_PREP'] = pd.to_numeric(m_costos_clean['P_PREP'], errors='coerce').fillna(0)
                     m_costos_clean['P_TRANS'] = pd.to_numeric(m_costos_clean['P_TRANS'], errors='coerce').fillna(0)
@@ -147,7 +147,7 @@ elif st.session_state['pagina_actual'] == "sistema":
                     res = pd.merge(res, m_costos_clean[['DESCRIPCIÓN ZONA', 'P_PREP', 'P_TRANS']], on='DESCRIPCIÓN ZONA', how='left')
 
                     if res['GP'].isna().any() or res['P_PREP'].isna().any():
-                        st.error("🛑 BLOQUEO: Faltan datos en maestros.")
+                        st.error("🛑 BLOQUEO: Hay códigos o zonas sin registro.")
                     else:
                         res['TOTAL_PREPARACION'] = res['P_PREP'] * res['BULTOS']
                         res['TOTAL_TRANSPORTE'] = res['P_TRANS'] * res['BULTOS']
@@ -165,19 +165,10 @@ elif st.session_state['pagina_actual'] == "sistema":
                         
                         summary_f = pd.concat([summary.reset_index(), pd.DataFrame([{'GP': '--- TOTALES ---', **summary.sum()}])], ignore_index=True)
                         st.table(summary_f.style.format(subset=summary_f.columns[1:], formatter="{:,.2f}"))
-                        st.download_button("📥 Descargar Resumen", format_excel(summary_f), f"Resumen_{mes_sel}.xlsx")
-
-                        if st.button("💾 Guardar en Historial"):
-                            res['MES_PROCESO'] = mes_sel
-                            if os.path.exists(HISTORICO_FILE):
-                                df_h_old = pd.read_csv(HISTORICO_FILE); df_h_old = df_h_old[df_h_old['MES_PROCESO'] != mes_sel]
-                                pd.concat([df_h_old, res]).to_csv(HISTORICO_FILE, index=False)
-                            else: res.to_csv(HISTORICO_FILE, index=False)
-                            st.success("Guardado correctamente.")
                         st.session_state['res_actual'] = res
                         st.session_state['mes_actual'] = mes_sel
 
-    with tabs[1]: # DETALLE ORIGINAL
+    with tabs[1]: # DETALLE ACTUAL (KPIs)
         if 'res_actual' in st.session_state:
             df_v = st.session_state['res_actual']
             k1, k2, k3, k4 = st.columns(4)
@@ -188,8 +179,7 @@ elif st.session_state['pagina_actual'] == "sistema":
             st.divider()
             st.dataframe(df_v, use_container_width=True)
 
-    with tabs[2]: # CONFIG ORIGINAL
-        st.header("⚙️ Maestros")
+    with tabs[2]: # CONFIG
         ca, cb = st.columns(2)
         with ca:
             ug = st.file_uploader("Cargar GP", key="ug_ex")
@@ -199,7 +189,7 @@ elif st.session_state['pagina_actual'] == "sistema":
             if uc: leer_archivo(uc).to_csv(PATH_COSTOS, index=False); st.success("Costos OK")
 
 # ---------------------------------------------------------
-# PANTALLA 3: VV / REPROGRAMA (ESPEJO INDEPENDIENTE)
+# PANTALLA 3: VV / REPROGRAMA (ESPEJO CORREGIDO)
 # ---------------------------------------------------------
 elif st.session_state['pagina_actual'] == "reprograma":
     if st.sidebar.button("⬅️ Volver al Menú Principal"):
@@ -214,30 +204,38 @@ elif st.session_state['pagina_actual'] == "reprograma":
 
     with tabs_v[0]: 
         if m_gp_vv is None or m_cost_vv is None:
-            st.warning("⚠️ Cargue los maestros específicos para VV.")
+            st.warning("⚠️ Cargue los maestros específicos para VV en la pestaña Configurar.")
         else:
             c1v, c2v = st.columns([1, 2])
-            with c1v: mes_vv = st.selectbox("Mes VV", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], key="mvv")
-            with c2v: arch_vv = st.file_uploader("Subir Carga VV", key="avv")
+            with c1v: mes_v = st.selectbox("Mes VV", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], key="mvv")
+            with c2v: arch_v = st.file_uploader("Subir Carga VV", key="avv")
 
-            if arch_vv:
-                df_v = leer_archivo(arch_vv)
-                if df_v is not None:
-                    df_v.columns = df_v.columns.str.strip().str.upper()
-                    df_v['CODIGO'] = df_v['CODIGO'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
-                    df_v['DESCRIPCIÓN ZONA'] = df_v['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
-                    df_v['BULTOS'] = pd.to_numeric(df_v['BULTOS'], errors='coerce').fillna(0)
+            if arch_v:
+                df_vv = leer_archivo(arch_v)
+                if df_vv is not None:
+                    # Limpieza Carga VV
+                    df_vv.columns = df_vv.columns.str.strip().str.upper()
+                    df_vv['CODIGO'] = df_vv['CODIGO'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+                    df_vv['DESCRIPCIÓN ZONA'] = df_vv['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
+                    df_vv['BULTOS'] = pd.to_numeric(df_vv['BULTOS'], errors='coerce').fillna(0)
                     
-                    # Maestros VV
+                    # Limpieza Maestros VV (Evitar duplicados)
                     id_v = [c for c in m_gp_vv.columns if 'CODIGO' in c.upper()][0]
-                    mgp_v = m_gp_vv.copy(); mgp_v[id_v] = mgp_v[id_v].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
-                    mct_v = m_cost_vv.copy(); mct_v.columns = mct_v.columns.str.strip().str.upper()
+                    mgp_v = m_gp_vv.copy()
+                    mgp_v[id_v] = mgp_v[id_v].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+                    mgp_v = mgp_v.drop_duplicates(subset=[id_v]) # CRÍTICO: Quita duplicados
+                    
+                    mct_v = m_cost_vv.copy()
+                    mct_v.columns = mct_v.columns.str.strip().str.upper()
                     rn_v = {c: "P_PREP" for c in mct_v.columns if "PREP" in c}
                     rn_v.update({c: "P_TRANS" for c in mct_v.columns if "TRANS" in c})
                     rn_v.update({c: "DESCRIPCIÓN ZONA" for c in mct_v.columns if "ZONA" in c})
-                    mct_v = mct_v.rename(columns=rn_v); mct_v['DESCRIPCIÓN ZONA'] = mct_v['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
+                    mct_v = mct_v.rename(columns=rn_v)
+                    mct_v['DESCRIPCIÓN ZONA'] = mct_v['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
+                    mct_v = mct_v.drop_duplicates(subset=['DESCRIPCIÓN ZONA']) # CRÍTICO: Quita duplicados
                     
-                    res_vv = pd.merge(df_v, mgp_v[[id_v, 'GP', 'TIPO']], left_on='CODIGO', right_on=id_v, how='left')
+                    # Merge y Cálculos
+                    res_vv = pd.merge(df_vv, mgp_v[[id_v, 'GP', 'TIPO']], left_on='CODIGO', right_on=id_v, how='left')
                     res_vv = pd.merge(res_vv, mct_v[['DESCRIPCIÓN ZONA', 'P_PREP', 'P_TRANS']], on='DESCRIPCIÓN ZONA', how='left')
                     
                     res_vv['TOTAL_PREPARACION'] = res_vv['P_PREP'] * res_vv['BULTOS']
@@ -246,16 +244,24 @@ elif st.session_state['pagina_actual'] == "reprograma":
                     res_vv['IVA'] = res_vv['SUBTOTAL_NETO'] * 0.15
                     res_vv['TOTAL_FINAL'] = res_vv['SUBTOTAL_NETO'] + res_vv['IVA']
 
-                    st.subheader(f"📊 Resumen VV: {mes_vv}")
-                    kv1, kv2, kv3, kv4 = st.columns(4)
-                    kv1.metric("Bultos", f"{res_vv['BULTOS'].sum():,.0f}"); kv2.metric("Prep.", f"$ {res_vv['TOTAL_PREPARACION'].sum():,.2f}"); kv3.metric("Trans.", f"$ {res_vv['TOTAL_TRANSPORTE'].sum():,.2f}"); kv4.metric("Total Final", f"$ {res_vv['TOTAL_FINAL'].sum():,.2f}")
+                    st.subheader(f"📊 Resumen VV: {mes_v}")
+                    # KPIs VV
+                    k1v, k2v, k3v, k4v = st.columns(4)
+                    k1v.metric("Bultos", f"{res_vv['BULTOS'].sum():,.0f}")
+                    k2v.metric("Prep.", f"$ {res_vv['TOTAL_PREPARACION'].sum():,.2f}")
+                    k3v.metric("Trans.", f"$ {res_vv['TOTAL_TRANSPORTE'].sum():,.2f}")
+                    k4v.metric("Total Final", f"$ {res_vv['TOTAL_FINAL'].sum():,.2f}")
                     
                     sum_v = res_vv.pivot_table(index='GP', columns='TIPO', values='SUBTOTAL_NETO', aggfunc='sum').fillna(0)
                     sum_v['TOTAL'] = sum_v.sum(axis=1)
                     st.table(sum_v.style.format("{:,.2f}"))
-                    st.session_state['res_vv'] = res_vv
+                    st.session_state['res_vv_final'] = res_vv
 
-    with tabs_v[2]:
+    with tabs_v[1]: # DETALLE VV (ACTIVADO)
+        if 'res_vv_final' in st.session_state:
+            st.dataframe(st.session_state['res_vv_final'], use_container_width=True)
+
+    with tabs_v[2]: # CONFIG VV
         cva, cvb = st.columns(2)
         with cva:
             ugv = st.file_uploader("Maestro GP VV", key="ugvv")
