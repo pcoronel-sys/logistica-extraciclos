@@ -41,6 +41,15 @@ st.markdown(f"""
     [data-testid="stTable"] thead tr th {{ background-color: #2C3E50 !important; color: white !important; font-weight: bold !important; }}
     div[data-testid="stMetric"] {{ background: white !important; border-radius: 20px !important; padding: 20px !important; border-left: 8px solid {MAGENTA_BAGO} !important; box-shadow: 0 10px 20px rgba(0,0,0,0.04) !important; }}
     
+    .small-btn button {{
+        height: auto !important;
+        padding: 5px 15px !important;
+        font-size: 0.8rem !important;
+        background: #ff4b4b22 !important;
+        color: #ff4b4b !important;
+        border: 1px solid #ff4b4b !important;
+    }}
+
     .stDownloadButton button {{
         height: 45px !important;
         width: auto !important;
@@ -56,9 +65,9 @@ st.markdown(f"""
 if 'pagina_actual' not in st.session_state:
     st.session_state['pagina_actual'] = "inicio"
 
-# RUTAS DE ARCHIVOS (Separadas para cada botón)
 PATH_GP = "master_gp.csv"
 PATH_COSTOS = "master_costos.csv"
+# NUEVAS RUTAS PARA EL BOTON 2
 PATH_GP_VV = "master_gp_vv.csv"
 PATH_COSTOS_VV = "master_costos_vv.csv"
 HISTORICO_FILE = "base_historica_bago.csv"
@@ -79,7 +88,7 @@ def format_excel(df):
     return output.getvalue()
 
 hora_ajustada = (datetime.now() - timedelta(hours=5)).hour
-saludo_txt = "☀️ Buenos días" if 5 <= hora_ajustada < 12 else "🌤️ Buenas tardes" if 12 <= hora_ajustada < 19 else "🌙 Buenos noches"
+saludo_txt = "☀️ Buenos días" if 5 <= hora_ajustada < 12 else "🌤️ Buenas tardes" if 12 <= hora_ajustada < 19 else "🌙 Buenas noches"
 
 # ---------------------------------------------------------
 # PANTALLA 1: INICIO
@@ -101,7 +110,7 @@ if st.session_state['pagina_actual'] == "inicio":
             st.rerun()
 
 # ---------------------------------------------------------
-# PANTALLA 2: EXTRA CICLOS (MODO SISTEMA)
+# PANTALLA 2: SISTEMA PRINCIPAL (MANTENIDO IGUAL)
 # ---------------------------------------------------------
 elif st.session_state['pagina_actual'] == "sistema":
     if st.sidebar.button("⬅️ Volver al Menú Principal"):
@@ -145,15 +154,15 @@ elif st.session_state['pagina_actual'] == "sistema":
                     res['TOTAL_FINAL'] = res['SUBTOTAL_NETO'] * 1.15
 
                     st.subheader(f"📋 Resumen: {mes_sel}")
-                    summary = res.pivot_table(index='GP', columns='TIPO', values='SUBTOTAL_NETO', aggfunc='sum').fillna(0)
+                    sum_e = res.pivot_table(index='GP', columns='TIPO', values='SUBTOTAL_NETO', aggfunc='sum').fillna(0)
                     for col in ['MM', 'MP']:
-                        if col not in summary.columns: summary[col] = 0.0
-                    summary['SUBTOTAL'] = summary['MM'] + summary['MP']
-                    summary['IVA 15%'] = summary['SUBTOTAL'] * 0.15
-                    summary['TOTAL GENERAL'] = summary['SUBTOTAL'] + summary['IVA 15%']
-                    summary_f = pd.concat([summary.reset_index(), pd.DataFrame([{'GP': '--- TOTALES ---', **summary.sum()}])], ignore_index=True)
-                    st.table(summary_f.style.format(subset=summary_f.columns[1:], formatter="{:,.2f}"))
-                    st.download_button("📥 Descargar Resumen", format_excel(summary_f), f"Resumen_Extra_{mes_sel}.xlsx")
+                        if col not in sum_e.columns: sum_e[col] = 0.0
+                    sum_e['SUBTOTAL'] = sum_e['MM'] + sum_e['MP']
+                    sum_e['IVA 15%'] = sum_e['SUBTOTAL'] * 0.15
+                    sum_e['TOTAL GENERAL'] = sum_e['SUBTOTAL'] + sum_e['IVA 15%']
+                    sum_e_f = pd.concat([sum_e.reset_index(), pd.DataFrame([{'GP': '--- TOTALES ---', **sum_e.sum()}])], ignore_index=True)
+                    st.table(sum_e_f.style.format(subset=sum_e_f.columns[1:], formatter="{:,.2f}"))
+                    st.download_button("📥 Descargar Resumen", format_excel(sum_e_f), f"Resumen_Extra_{mes_sel}.xlsx")
                     st.session_state['res_ex'] = res
 
     with tabs[1]:
@@ -161,32 +170,40 @@ elif st.session_state['pagina_actual'] == "sistema":
             d = st.session_state['res_ex']
             k1, k2, k3, k4 = st.columns(4)
             k1.metric("Bultos", f"{d['BULTOS'].sum():,.0f}"); k2.metric("Prep.", f"$ {d['TOTAL_PREPARACION'].sum():,.2f}"); k3.metric("Trans.", f"$ {d['TOTAL_TRANSPORTE'].sum():,.2f}"); k4.metric("Total Final", f"$ {d['TOTAL_FINAL'].sum():,.2f}")
-            st.download_button("📥 Descargar Detalle", format_excel(d), "Detalle_Extra.xlsx")
             st.dataframe(d, use_container_width=True)
 
+    with tabs[2]:
+        ca, cb = st.columns(2)
+        with ca:
+            ug = st.file_uploader("Cargar GP Extra", key="ug_ex")
+            if ug: leer_archivo(ug).to_csv(PATH_GP, index=False); st.success("GP OK")
+        with cb:
+            uc = st.file_uploader("Cargar Costos Extra", key="uc_ex")
+            if uc: leer_archivo(uc).to_csv(PATH_COSTOS, index=False); st.success("Costos OK")
+
 # ---------------------------------------------------------
-# PANTALLA 3: VV / REPROGRAMA (ESPEJO DEL BOTÓN 1)
+# PANTALLA 3: VV / REPROGRAMA (CLON DEL SISTEMA)
 # ---------------------------------------------------------
 elif st.session_state['pagina_actual'] == "reprograma":
-    if st.sidebar.button("⬅️ Volver al Menú Principal"):
+    if st.sidebar.button("⬅️ Volver al Menú Principal", key="back_vv"):
         st.session_state['pagina_actual'] = "inicio"
         st.rerun()
 
     st.markdown(f'<p class="main-title" style="font-size: 3.5rem !important;">Módulo VV / Reprograma</p>', unsafe_allow_html=True)
     m_gp_v = cargar_maestro(PATH_GP_VV)
     m_ct_v = cargar_maestro(PATH_COSTOS_VV)
-    tabs_v = st.tabs(["🚀 Liquidación VV", "🔍 Detalle VV", "⚙️ Configurar Maestros VV"])
+    tabs_v = st.tabs(["🚀 Liquidación VV", "🔍 Detalle VV", "⚙️ Configurar Maestros VV", "🗄️ Historial VV"])
 
     with tabs_v[0]:
         if m_gp_v is None or m_ct_v is None:
             st.warning("⚠️ Cargue los maestros específicos para VV.")
         else:
             c1v, c2v = st.columns([1, 2])
-            with c1v: mes_vv = st.selectbox("Mes VV", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], key="vv_sel")
-            with c2v: archivo_v = st.file_uploader("Subir Carga VV", type=['xlsx', 'xls', 'csv'], key="up_vv")
+            with c1v: mes_vv = st.selectbox("Mes VV", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], key="mvv")
+            with c2v: arch_vv = st.file_uploader("Subir Carga VV", type=['xlsx', 'xls', 'csv'], key="up_vv")
 
-            if archivo_v:
-                df_vv = leer_archivo(archivo_v)
+            if arch_vv:
+                df_vv = leer_archivo(arch_vv)
                 if df_vv is not None:
                     df_vv.columns = df_vv.columns.str.strip().str.upper()
                     df_vv['CODIGO'] = df_vv['CODIGO'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
@@ -194,15 +211,15 @@ elif st.session_state['pagina_actual'] == "reprograma":
                     df_vv['BULTOS'] = pd.to_numeric(df_vv['BULTOS'], errors='coerce').fillna(0)
                     
                     id_v = [c for c in m_gp_v.columns if 'CODIGO' in c.upper()][0]
-                    mgp_v_c = m_gp_v.copy(); mgp_v_c[id_v] = mgp_v_c[id_v].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
-                    mgp_v_c = mgp_v_c.drop_duplicates(subset=[id_v])
+                    mgp_v = m_gp_v.copy(); mgp_v[id_v] = mgp_v[id_v].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+                    mgp_v = mgp_v.drop_duplicates(subset=[id_v])
                     
-                    mct_v_c = m_ct_v.copy(); mct_v_c.columns = mct_v_c.columns.str.strip().str.upper()
-                    rn_v = {c: "P_PREP" for c in mct_v_c.columns if "PREP" in c}; rn_v.update({c: "P_TRANS" for c in mct_v_c.columns if "TRANS" in c}); rn_v.update({c: "DESCRIPCIÓN ZONA" for c in mct_v_c.columns if "ZONA" in c})
-                    mct_v_c = mct_v_c.rename(columns=rn_v).drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
+                    mct_v = m_ct_v.copy(); mct_v.columns = mct_v.columns.str.strip().str.upper()
+                    rn_v = {c: "P_PREP" for c in mct_v.columns if "PREP" in c}; rn_v.update({c: "P_TRANS" for c in mct_v.columns if "TRANS" in c}); rn_v.update({c: "DESCRIPCIÓN ZONA" for c in mct_v.columns if "ZONA" in c})
+                    mct_v = mct_v.rename(columns=rn_v).drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
                     
-                    res_vv = pd.merge(df_vv, mgp_v_c[[id_v, 'GP', 'TIPO']], left_on='CODIGO', right_on=id_v, how='left')
-                    res_vv = pd.merge(res_vv, mct_v_c[['DESCRIPCIÓN ZONA', 'P_PREP', 'P_TRANS']], on='DESCRIPCIÓN ZONA', how='left')
+                    res_vv = pd.merge(df_vv, mgp_v[[id_v, 'GP', 'TIPO']], left_on='CODIGO', right_on=id_v, how='left')
+                    res_vv = pd.merge(res_vv, mct_v[['DESCRIPCIÓN ZONA', 'P_PREP', 'P_TRANS']], on='DESCRIPCIÓN ZONA', how='left')
                     
                     res_vv['TOTAL_PREPARACION'] = res_vv['P_PREP'] * res_vv['BULTOS']
                     res_vv['TOTAL_TRANSPORTE'] = res_vv['P_TRANS'] * res_vv['BULTOS']
@@ -229,17 +246,20 @@ elif st.session_state['pagina_actual'] == "reprograma":
             st.download_button("📥 Descargar Detalle VV", format_excel(dv), "Detalle_VV.xlsx")
             st.dataframe(dv, use_container_width=True)
 
-# CONFIGURACIÓN (REUTILIZABLE)
+    with tabs_v[2]:
+        cva, cvb = st.columns(2)
+        with cva:
+            ugv = st.file_uploader("Cargar GP VV", key="ug_vv")
+            if ugv: leer_archivo(ugv).to_csv(PATH_GP_VV, index=False); st.success("GP VV OK")
+        with cvb:
+            ucv = st.file_uploader("Cargar Costos VV", key="uc_vv")
+            if ucv: leer_archivo(ucv).to_csv(PATH_COSTOS_VV, index=False); st.success("Costos VV OK")
+
+# CONFIGURACIÓN (REUTILIZABLE PARA EL HISTORIAL)
 if st.session_state['pagina_actual'] != "inicio":
-    current_tab = tabs[2] if st.session_state['pagina_actual'] == "sistema" else tabs_v[2]
+    current_tab = tabs[3] if st.session_state['pagina_actual'] == "sistema" else tabs_v[3]
     with current_tab:
-        st.header("⚙️ Maestros")
-        ca, cb = st.columns(2)
-        p_gp = PATH_GP if st.session_state['pagina_actual'] == "sistema" else PATH_GP_VV
-        p_ct = PATH_COSTOS if st.session_state['pagina_actual'] == "sistema" else PATH_COSTOS_VV
-        with ca:
-            ug = st.file_uploader("Cargar GP", key=f"cfg_gp_{st.session_state['pagina_actual']}")
-            if ug: leer_archivo(ug).to_csv(p_gp, index=False); st.success("GP OK")
-        with cb:
-            uc = st.file_uploader("Cargar Costos", key=f"cfg_ct_{st.session_state['pagina_actual']}")
-            if uc: leer_archivo(uc).to_csv(p_ct, index=False); st.success("Costos OK")
+        if os.path.exists(HISTORICO_FILE):
+            st.info("Visualización de historial centralizado.")
+            df_h = pd.read_csv(HISTORICO_FILE)
+            st.dataframe(df_h, use_container_width=True)
