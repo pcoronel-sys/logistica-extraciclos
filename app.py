@@ -250,11 +250,9 @@ elif st.session_state['pagina_actual'] == "sistema":
                 st.info("No hay meses válidos en el historial.")
         else:
             st.info("Archivo historial no encontrado.")
-
 # ---------------------------------------------------------
-# PANTALLA 3: SISTEMA REPROGRAMA (ESPEJO VV)
+# PANTALLA 3: SISTEMA REPROGRAMA (ESPEJO VV CON DESGLOSE)
 # ---------------------------------------------------------
-
 elif st.session_state['pagina_actual'] == "sistema_reprograma":
     if st.sidebar.button("⬅️ Volver al Menú Principal"):
         st.session_state['pagina_actual'] = "inicio"
@@ -276,19 +274,16 @@ elif st.session_state['pagina_actual'] == "sistema_reprograma":
             if archivo:
                 df_c = leer_archivo(archivo)
                 if df_c is not None:
-                    # Limpieza estándar
                     df_c.columns = df_c.columns.str.strip().str.upper()
                     df_c['CODIGO'] = df_c['CODIGO'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                     df_c['DESCRIPCIÓN ZONA'] = df_c['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
                     df_c['BULTOS'] = pd.to_numeric(df_c['BULTOS'], errors='coerce').fillna(0)
                     
-                    # Limpieza Maestro GP Repro
                     col_id_gp = [c for c in m_gp_r.columns if 'CODIGO' in c.upper()][0]
                     m_gp_clean = m_gp_r.copy()
                     m_gp_clean[col_id_gp] = m_gp_clean[col_id_gp].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                     m_gp_clean = m_gp_clean.drop_duplicates(subset=[col_id_gp])
                     
-                    # Limpieza Maestro Costos Repro
                     m_costos_clean = m_costos_r.copy()
                     m_costos_clean.columns = m_costos_clean.columns.str.strip().str.upper()
                     renames = {c: "P_PREP" for c in m_costos_clean.columns if "PREP" in c}
@@ -296,31 +291,42 @@ elif st.session_state['pagina_actual'] == "sistema_reprograma":
                     renames.update({c: "DESCRIPCIÓN ZONA" for c in m_costos_clean.columns if "ZONA" in c})
                     m_costos_clean = m_costos_clean.rename(columns=renames)
                     m_costos_clean['DESCRIPCIÓN ZONA'] = m_costos_clean['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
+                    m_costos_clean['P_PREP'] = pd.to_numeric(m_costos_clean['P_PREP'], errors='coerce').fillna(0)
+                    m_costos_clean['P_TRANS'] = pd.to_numeric(m_costos_clean['P_TRANS'], errors='coerce').fillna(0)
                     m_costos_clean = m_costos_clean.drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
                     
-                    # Merge y Cálculos
                     res = pd.merge(df_c, m_gp_clean[[col_id_gp, 'GP']], left_on='CODIGO', right_on=col_id_gp, how='left')
                     res = pd.merge(res, m_costos_clean[['DESCRIPCIÓN ZONA', 'P_PREP', 'P_TRANS']], on='DESCRIPCIÓN ZONA', how='left')
 
                     if res['GP'].isna().any() or res['P_PREP'].isna().any():
-                        st.error("🛑 BLOQUEO REPROGRAMA: Datos faltantes en maestros.")
+                        st.error("🛑 BLOQUEO REPROGRAMA: Datos faltantes.")
                         st.write("Códigos Faltantes:", res[res['GP'].isna()]['CODIGO'].unique())
                         st.write("Zonas Faltantes:", res[res['P_PREP'].isna()]['DESCRIPCIÓN ZONA'].unique())
                     else:
-                        res['SUBTOTAL'] = (pd.to_numeric(res['P_PREP'], errors='coerce').fillna(0) + pd.to_numeric(res['P_TRANS'], errors='coerce').fillna(0)) * res['BULTOS']
-                        res['TOTAL_FINAL'] = res['SUBTOTAL'] * 1.15
+                        # Cálculos desglosados
+                        res['TOTAL_PREPARACION'] = res['P_PREP'] * res['BULTOS']
+                        res['TOTAL_TRANSPORTE'] = res['P_TRANS'] * res['BULTOS']
+                        res['SUBTOTAL_NETO'] = res['TOTAL_PREPARACION'] + res['TOTAL_TRANSPORTE']
+                        res['IVA_15'] = res['SUBTOTAL_NETO'] * 0.15
+                        res['TOTAL_FINAL'] = res['SUBTOTAL_NETO'] + res['IVA_15']
 
-                        st.subheader(f"📋 Resumen Consolidado VV: {mes_sel}")
+                        st.subheader(f"📋 Resumen Desglosado VV: {mes_sel}")
                         
-                        # Resumen por GP con Subtotales
-                        summary = res.groupby('GP')['SUBTOTAL'].sum().reset_index()
-                        summary.columns = ['GP', 'SUBTOTAL VV']
-                        summary['IVA 15%'] = summary['SUBTOTAL VV'] * 0.15
-                        summary['TOTAL GENERAL'] = summary['SUBTOTAL VV'] + summary['IVA 15%']
+                        # Resumen por GP con desglose de rubros
+                        summary = res.groupby('GP').agg({
+                            'TOTAL_PREPARACION': 'sum',
+                            'TOTAL_TRANSPORTE': 'sum',
+                            'SUBTOTAL_NETO': 'sum'
+                        }).reset_index()
+                        
+                        summary['IVA 15%'] = summary['SUBTOTAL_NETO'] * 0.15
+                        summary['TOTAL GENERAL'] = summary['SUBTOTAL_NETO'] + summary['IVA 15%']
                         
                         summary_f = pd.concat([summary, pd.DataFrame([{
                             'GP': '--- TOTALES ---', 
-                            'SUBTOTAL VV': summary['SUBTOTAL VV'].sum(), 
+                            'TOTAL_PREPARACION': summary['TOTAL_PREPARACION'].sum(),
+                            'TOTAL_TRANSPORTE': summary['TOTAL_TRANSPORTE'].sum(),
+                            'SUBTOTAL_NETO': summary['SUBTOTAL_NETO'].sum(), 
                             'IVA 15%': summary['IVA 15%'].sum(), 
                             'TOTAL GENERAL': summary['TOTAL GENERAL'].sum()
                         }])], ignore_index=True)
@@ -336,12 +342,12 @@ elif st.session_state['pagina_actual'] == "sistema_reprograma":
                                 pd.concat([df_h_old, res]).to_csv(HISTORICO_REPRO_FILE, index=False)
                             else:
                                 res.to_csv(HISTORICO_REPRO_FILE, index=False)
-                            st.success("Guardado correctamente en base Reprograma.")
+                            st.success("Guardado correctamente.")
 
                         st.session_state['res_repro'] = res
                         st.session_state['mes_repro_actual'] = mes_sel
 
-    with tabs[1]: # TAB 1: DETALLE VV (KPIs Y FILTROS)
+    with tabs[1]: # TAB 1: DETALLE VV (KPIs DESGLOSADOS)
         if 'res_repro' in st.session_state:
             df_full_r = st.session_state['res_repro']
             
@@ -354,62 +360,56 @@ elif st.session_state['pagina_actual'] == "sistema_reprograma":
             if sel_gp_r: df_v_r = df_v_r[df_v_r['GP'].isin(sel_gp_r)]
             if sel_zona_r: df_v_r = df_v_r[df_v_r['DESCRIPCIÓN ZONA'].isin(sel_zona_r)]
 
-            # KPIs DINÁMICOS
-            k1, k2, k3, k4 = st.columns(4)
-            sub_val = df_v_r['SUBTOTAL'].sum()
-            iva_val = sub_val * 0.15
-            
-            k1.metric("Bultos Procesados", f"{df_v_r['BULTOS'].sum():,.0f}")
-            k2.metric("Subtotal Neto", f"$ {sub_val:,.2f}")
-            k3.metric("IVA (15%)", f"$ {iva_val:,.2f}")
-            k4.metric("Total con IVA", f"$ {df_v_r['TOTAL_FINAL'].sum():,.2f}")
+            # KPIs DESGLOSADOS (Mismo estilo que Extra Ciclos)
+            k1, k2, k3, k4, k5 = st.columns(5)
+            k1.metric("Bultos", f"{df_v_r['BULTOS'].sum():,.0f}")
+            k2.metric("Preparación", f"$ {df_v_r['TOTAL_PREPARACION'].sum():,.2f}")
+            k3.metric("Transporte", f"$ {df_v_r['TOTAL_TRANSPORTE'].sum():,.2f}")
+            k4.metric("IVA 15%", f"$ {df_v_r['IVA_15'].sum():,.2f}")
+            k5.metric("Total Final", f"$ {df_v_r['TOTAL_FINAL'].sum():,.2f}")
             
             st.divider()
             st.download_button("📥 Descargar Detalle Filtrado VV", format_excel(df_v_r), f"Detalle_VV_{st.session_state['mes_repro_actual']}.xlsx")
             st.dataframe(df_v_r, use_container_width=True)
 
-    with tabs[2]: # TAB 2: CONFIGURACIÓN MAESTROS REPRO
+    with tabs[2]: # TAB 2: CONFIGURACIÓN
         st.header("⚙️ Gestión de Maestros Reprograma")
         ca, cb = st.columns(2)
         with ca:
             ug = st.file_uploader("Actualizar Maestro GP (Repro)", type=['csv','xlsx'], key="up_gp_r_tab")
             if ug:
                 d = leer_archivo(ug)
-                if d is not None: d.to_csv(PATH_GP_REPRO, index=False); st.success("Maestro GP Reprograma actualizado.")
+                if d is not None: d.to_csv(PATH_GP_REPRO, index=False); st.success("GP Reprograma OK")
         with cb:
             uc = st.file_uploader("Actualizar Maestro Costos (Repro)", type=['csv','xlsx'], key="up_co_r_tab")
             if uc:
                 d = leer_archivo(uc)
-                if d is not None: d.to_csv(PATH_COSTOS_REPRO, index=False); st.success("Maestro Costos Reprograma actualizado.")
+                if d is not None: d.to_csv(PATH_COSTOS_REPRO, index=False); st.success("Costos Reprograma OK")
 
-    with tabs[3]: # TAB 3: HISTORIAL VV
+    with tabs[3]: # TAB 3: HISTORIAL
         st.header("🗄️ Consulta Histórica VV")
         if os.path.exists(HISTORICO_REPRO_FILE):
             df_h = pd.read_csv(HISTORICO_REPRO_FILE)
-            # Asegurar tipos numéricos para KPIs históricos
-            for c in ['SUBTOTAL', 'TOTAL_FINAL', 'BULTOS']:
+            for c in ['TOTAL_PREPARACION', 'TOTAL_TRANSPORTE', 'TOTAL_FINAL', 'BULTOS']:
                 if c in df_h.columns: df_h[c] = pd.to_numeric(df_h[c], errors='coerce').fillna(0)
             
             meses = sorted(df_h['MES_PROCESO'].dropna().unique())
             if meses:
-                m_h = st.selectbox("Seleccionar Mes a Consultar:", meses, key="hist_repro_sel")
+                m_h = st.selectbox("Seleccionar Mes:", meses, key="hist_repro_sel")
                 df_mostrar = df_h[df_h['MES_PROCESO'] == m_h]
                 
-                h1, h2, h3 = st.columns(3)
-                h1.metric("Bultos en Historial", f"{df_mostrar['BULTOS'].sum():,.0f}")
-                h2.metric("Total Facturado", f"$ {df_mostrar['TOTAL_FINAL'].sum():,.2f}")
-                h3.metric("Cant. Registros", len(df_mostrar))
+                h1, h2, h3, h4 = st.columns(4)
+                h1.metric("Bultos", f"{df_mostrar['BULTOS'].sum():,.0f}")
+                h2.metric("Prep. Hist.", f"$ {df_mostrar['TOTAL_PREPARACION'].sum():,.2f}")
+                h3.metric("Trans. Hist.", f"$ {df_mostrar['TOTAL_TRANSPORTE'].sum():,.2f}")
+                h4.metric("Total Facturado", f"$ {df_mostrar['TOTAL_FINAL'].sum():,.2f}")
                 
                 st.dataframe(df_mostrar, use_container_width=True)
                 
-                # Botón de borrado con estilo
                 st.markdown('<div class="small-btn">', unsafe_allow_html=True)
                 if st.button(f"🗑️ Eliminar historial {m_h}", key="del_repro_hist"):
                     df_h = df_h[df_h['MES_PROCESO'] != m_h]
                     df_h.to_csv(HISTORICO_REPRO_FILE, index=False)
                     st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
-            else:
-                st.info("No hay datos guardados en el historial de Reprograma.")
-        else:
-            st.info("No se encontró el archivo de base histórica de Reprograma.")
+
