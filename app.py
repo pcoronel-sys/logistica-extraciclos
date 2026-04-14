@@ -97,7 +97,7 @@ if st.session_state['pagina_actual'] == "inicio":
             st.session_state['pagina_actual'] = "sistema" 
             st.rerun()
     with col_r:
-        if st.button("\n REPROGRAMA"):
+        if st.button("\n VISITA VIRTUAL"):
             st.session_state['pagina_actual'] = "sistema_reprograma" 
             st.rerun()
 
