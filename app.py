@@ -310,7 +310,7 @@ elif st.session_state['pagina_actual'] == "sistema_reprograma":
                         res['IVA_15'] = res['SUBTOTAL_NETO'] * 0.15
                         res['TOTAL_FINAL'] = res['SUBTOTAL_NETO'] + res['IVA_15']
 
-                        st.subheader(f"📋 Resumen Desglosado VV: {mes_sel}")
+                        st.subheader(f"📋 Resumen Visita Virtual: {mes_sel}")
                         
                         # Resumen por GP con desglose de rubros
                         summary = res.groupby('GP').agg({
@@ -351,7 +351,7 @@ elif st.session_state['pagina_actual'] == "sistema_reprograma":
         if 'res_repro' in st.session_state:
             df_full_r = st.session_state['res_repro']
             
-            st.markdown("### 🔍 Análisis Detallado VV")
+            st.markdown("### 🔍  Detallade Visita Virtual")
             f1, f2 = st.columns(2)
             with f1: sel_gp_r = st.multiselect("Filtrar por GP", options=sorted(df_full_r['GP'].unique()), key="f_gp_r")
             with f2: sel_zona_r = st.multiselect("Filtrar por Zona", options=sorted(df_full_r['DESCRIPCIÓN ZONA'].unique()), key="f_zona_r")
