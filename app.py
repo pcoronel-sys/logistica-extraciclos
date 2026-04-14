@@ -93,11 +93,11 @@ if st.session_state['pagina_actual'] == "inicio":
     
     _, col_l, col_r, _ = st.columns([6.5, 1.8, 1.8, 6.5])
     with col_l:
-        if st.button("\n\n   EXTRA CICLOS"):
+        if st.button("\n\n🧾EXTRA CICLOS"):
             st.session_state['pagina_actual'] = "sistema" 
             st.rerun()
     with col_r:
-        if st.button("\n VISITA VIRTUAL"):
+        if st.button("\n\n🧾VISITA VIRTUAL"):
             st.session_state['pagina_actual'] = "sistema_reprograma" 
             st.rerun()
 
@@ -191,7 +191,7 @@ elif st.session_state['pagina_actual'] == "sistema":
             df_full = st.session_state['res_actual']
             st.markdown("### 🔍 FILTROS")
             f1, f2, f3 = st.columns(3)
-            with f1: sel_gp = st.multiselect("QUIEN PAGA", options=sorted(df_full['GP'].unique()))
+            with f1: sel_gp = st.multiselect("GP", options=sorted(df_full['GP'].unique()))
             with f2: sel_tipo = st.multiselect("TIPO", options=sorted(df_full['TIPO'].unique()))
             with f3: sel_zona = st.multiselect("ZONA", options=sorted(df_full['DESCRIPCIÓN ZONA'].unique()))
 
@@ -207,7 +207,7 @@ elif st.session_state['pagina_actual'] == "sistema":
             k4.metric("TOTAL A PAGAR", f"$ {df_v['TOTAL_FINAL'].sum():,.2f}")
             
             st.divider()
-            st.download_button("📥 Descargar Detalle ", format_excel(df_v), f"Detalle_{st.session_state['mes_actual']}.xlsx")
+            st.download_button("📥 Descargar ", format_excel(df_v), f"Detalle_{st.session_state['mes_actual']}.xlsx")
             st.dataframe(df_v, use_container_width=True)
 
     with tabs[2]: # CONFIGURACIÓN
