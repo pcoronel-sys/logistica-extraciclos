@@ -5,7 +5,7 @@ import io
 from datetime import datetime, timedelta
 
 # 1. CONFIGURACIÓN DE PÁGINA
-st.set_page_config(page_title="Laboratorios Bagó - Conciliación Logística", layout="wide", page_icon="🧪")
+st.set_page_config(page_title="Laboratorios Bagó - Conciliación Extra Ciclos", layout="wide", page_icon="🧪")
 
 # --- DISEÑO ESTÉTICO UI/UX PRO (ESTILOS BAGO) ---
 MAGENTA_BAGO = "#C7006A" 
@@ -37,6 +37,10 @@ st.markdown(f"""
         transform: translateY(-15px) scale(1.03) !important; 
     }}
     
+    [data-testid="stSidebar"] {{ background-color: white !important; border-right: 1px solid #eee; }}
+    [data-testid="stTable"] thead tr th {{ background-color: #2C3E50 !important; color: white !important; font-weight: bold !important; }}
+    div[data-testid="stMetric"] {{ background: white !important; border-radius: 20px !important; padding: 20px !important; border-left: 8px solid {MAGENTA_BAGO} !important; box-shadow: 0 10px 20px rgba(0,0,0,0.04) !important; }}
+    
     .stDownloadButton button {{
         height: 45px !important;
         width: auto !important;
@@ -46,37 +50,36 @@ st.markdown(f"""
         background-color: white !important;
         border: 1px solid #ddd !important;
     }}
-
-    [data-testid="stSidebar"] {{ background-color: white !important; border-right: 1px solid #eee; }}
-    [data-testid="stTable"] thead tr th {{ background-color: #2C3E50 !important; color: white !important; font-weight: bold !important; }}
-    div[data-testid="stMetric"] {{ background: white !important; border-radius: 20px !important; padding: 20px !important; border-left: 8px solid {MAGENTA_BAGO} !important; box-shadow: 0 10px 20px rgba(0,0,0,0.04) !important; }}
     </style>
     """, unsafe_allow_html=True)
 
 if 'pagina_actual' not in st.session_state:
     st.session_state['pagina_actual'] = "inicio"
 
-# --- RUTAS ---
+# RUTAS DE ARCHIVOS (Separadas para cada botón)
 PATH_GP = "master_gp.csv"
 PATH_COSTOS = "master_costos.csv"
 PATH_GP_VV = "master_gp_vv.csv"
 PATH_COSTOS_VV = "master_costos_vv.csv"
+HISTORICO_FILE = "base_historica_bago.csv"
 
-# --- SOPORTE ---
+# --- FUNCIONES DE SOPORTE ---
 def cargar_maestro(path): return pd.read_csv(path) if os.path.exists(path) else None
+
 def leer_archivo(archivo):
     try:
         if archivo.name.lower().endswith(('.xlsx', '.xls')): return pd.read_excel(archivo)
         return pd.read_csv(archivo, encoding='latin-1')
     except: return None
+
 def format_excel(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Reporte')
+        df.to_excel(writer, index=False, sheet_name='Datos')
     return output.getvalue()
 
 hora_ajustada = (datetime.now() - timedelta(hours=5)).hour
-saludo_txt = "☀️ Buenos días" if 5 <= hora_ajustada < 12 else "🌤️ Buenas tardes" if 12 <= hora_ajustada < 19 else "🌙 Buenas noches"
+saludo_txt = "☀️ Buenos días" if 5 <= hora_ajustada < 12 else "🌤️ Buenas tardes" if 12 <= hora_ajustada < 19 else "🌙 Buenos noches"
 
 # ---------------------------------------------------------
 # PANTALLA 1: INICIO
@@ -101,21 +104,21 @@ if st.session_state['pagina_actual'] == "inicio":
 # PANTALLA 2: EXTRA CICLOS (MODO SISTEMA)
 # ---------------------------------------------------------
 elif st.session_state['pagina_actual'] == "sistema":
-    if st.sidebar.button("⬅️ Volver al Menú Principal", key="back_ex"):
+    if st.sidebar.button("⬅️ Volver al Menú Principal"):
         st.session_state['pagina_actual'] = "inicio"
         st.rerun()
 
     m_gp = cargar_maestro(PATH_GP)
     m_costos = cargar_maestro(PATH_COSTOS)
-    tabs = st.tabs(["🚀 Liquidación Mensual", "🔍 Detalle Actual", "⚙️ Configurar Maestros"])
+    tabs = st.tabs(["🚀 Liquidación Mensual", "🔍 Detalle Actual", "⚙️ Configurar Maestros", "🗄️ Historial"])
 
-    if m_gp is None or m_costos is None:
-        st.warning("⚠️ Cargue maestros en la pestaña Configurar.")
-    else:
-        with tabs[0]:
+    with tabs[0]: 
+        if m_gp is None or m_costos is None: 
+            st.warning("⚠️ Cargue los maestros en la pestaña Configurar.")
+        else:
             c1, c2 = st.columns([1, 2])
             with c1: mes_sel = st.selectbox("Mes", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"])
-            with c2: archivo = st.file_uploader("Subir Carga Mensual", key="up_ex")
+            with c2: archivo = st.file_uploader("Subir Carga Mensual", type=['xlsx', 'xls', 'csv'], key="up_ex")
 
             if archivo:
                 df_c = leer_archivo(archivo)
@@ -141,32 +144,31 @@ elif st.session_state['pagina_actual'] == "sistema":
                     res['SUBTOTAL_NETO'] = res['TOTAL_PREPARACION'] + res['TOTAL_TRANSPORTE']
                     res['TOTAL_FINAL'] = res['SUBTOTAL_NETO'] * 1.15
 
-                    st.subheader(f"📋 Resumen Extra Ciclos: {mes_sel}")
-                    sum_e = res.pivot_table(index='GP', columns='TIPO', values='SUBTOTAL_NETO', aggfunc='sum').fillna(0)
+                    st.subheader(f"📋 Resumen: {mes_sel}")
+                    summary = res.pivot_table(index='GP', columns='TIPO', values='SUBTOTAL_NETO', aggfunc='sum').fillna(0)
                     for col in ['MM', 'MP']:
-                        if col not in sum_e.columns: sum_e[col] = 0.0
-                    sum_e['SUBTOTAL'] = sum_e['MM'] + sum_e['MP']
-                    sum_e['IVA 15%'] = sum_e['SUBTOTAL'] * 0.15
-                    sum_e['TOTAL GENERAL'] = sum_e['SUBTOTAL'] + sum_e['IVA 15%']
-                    sum_e_f = pd.concat([sum_e.reset_index(), pd.DataFrame([{'GP': '--- TOTALES ---', **sum_e.sum()}])], ignore_index=True)
-                    st.table(sum_e_f.style.format(subset=sum_e_f.columns[1:], formatter="{:,.2f}"))
-                    
-                    st.download_button("📥 Descargar Resumen", format_excel(sum_e_f), f"Resumen_Extra_{mes_sel}.xlsx")
-                    st.session_state['res_ex'] = res; st.session_state['mes_ex'] = mes_sel
+                        if col not in summary.columns: summary[col] = 0.0
+                    summary['SUBTOTAL'] = summary['MM'] + summary['MP']
+                    summary['IVA 15%'] = summary['SUBTOTAL'] * 0.15
+                    summary['TOTAL GENERAL'] = summary['SUBTOTAL'] + summary['IVA 15%']
+                    summary_f = pd.concat([summary.reset_index(), pd.DataFrame([{'GP': '--- TOTALES ---', **summary.sum()}])], ignore_index=True)
+                    st.table(summary_f.style.format(subset=summary_f.columns[1:], formatter="{:,.2f}"))
+                    st.download_button("📥 Descargar Resumen", format_excel(summary_f), f"Resumen_Extra_{mes_sel}.xlsx")
+                    st.session_state['res_ex'] = res
 
-        with tabs[1]:
-            if 'res_ex' in st.session_state:
-                df = st.session_state['res_ex']
-                k1, k2, k3, k4 = st.columns(4)
-                k1.metric("Bultos", f"{df['BULTOS'].sum():,.0f}"); k2.metric("Prep.", f"$ {df['TOTAL_PREPARACION'].sum():,.2f}"); k3.metric("Trans.", f"$ {df['TOTAL_TRANSPORTE'].sum():,.2f}"); k4.metric("Total Final", f"$ {df['TOTAL_FINAL'].sum():,.2f}")
-                st.download_button("📥 Descargar Detalle", format_excel(df), f"Detalle_Extra_{st.session_state['mes_ex']}.xlsx")
-                st.dataframe(df, use_container_width=True)
+    with tabs[1]:
+        if 'res_ex' in st.session_state:
+            d = st.session_state['res_ex']
+            k1, k2, k3, k4 = st.columns(4)
+            k1.metric("Bultos", f"{d['BULTOS'].sum():,.0f}"); k2.metric("Prep.", f"$ {d['TOTAL_PREPARACION'].sum():,.2f}"); k3.metric("Trans.", f"$ {d['TOTAL_TRANSPORTE'].sum():,.2f}"); k4.metric("Total Final", f"$ {d['TOTAL_FINAL'].sum():,.2f}")
+            st.download_button("📥 Descargar Detalle", format_excel(d), "Detalle_Extra.xlsx")
+            st.dataframe(d, use_container_width=True)
 
 # ---------------------------------------------------------
-# PANTALLA 3: VV / REPROGRAMA (ESPEJO EXACTO)
+# PANTALLA 3: VV / REPROGRAMA (ESPEJO DEL BOTÓN 1)
 # ---------------------------------------------------------
 elif st.session_state['pagina_actual'] == "reprograma":
-    if st.sidebar.button("⬅️ Volver al Menú Principal", key="back_vv"):
+    if st.sidebar.button("⬅️ Volver al Menú Principal"):
         st.session_state['pagina_actual'] = "inicio"
         st.rerun()
 
@@ -175,13 +177,13 @@ elif st.session_state['pagina_actual'] == "reprograma":
     m_ct_v = cargar_maestro(PATH_COSTOS_VV)
     tabs_v = st.tabs(["🚀 Liquidación VV", "🔍 Detalle VV", "⚙️ Configurar Maestros VV"])
 
-    if m_gp_v is None or m_ct_v is None:
-        st.warning("⚠️ Cargue maestros específicos para VV.")
-    else:
-        with tabs_v[0]:
+    with tabs_v[0]:
+        if m_gp_v is None or m_ct_v is None:
+            st.warning("⚠️ Cargue los maestros específicos para VV.")
+        else:
             c1v, c2v = st.columns([1, 2])
             with c1v: mes_vv = st.selectbox("Mes VV", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], key="vv_sel")
-            with c2v: archivo_v = st.file_uploader("Subir Carga VV", key="up_vv")
+            with c2v: archivo_v = st.file_uploader("Subir Carga VV", type=['xlsx', 'xls', 'csv'], key="up_vv")
 
             if archivo_v:
                 df_vv = leer_archivo(archivo_v)
@@ -216,23 +218,21 @@ elif st.session_state['pagina_actual'] == "reprograma":
                     sum_v['TOTAL GENERAL'] = sum_v['SUBTOTAL'] + sum_v['IVA 15%']
                     sum_v_f = pd.concat([sum_v.reset_index(), pd.DataFrame([{'GP': '--- TOTALES ---', **sum_v.sum()}])], ignore_index=True)
                     st.table(sum_v_f.style.format(subset=sum_v_f.columns[1:], formatter="{:,.2f}"))
-                    
                     st.download_button("📥 Descargar Resumen VV", format_excel(sum_v_f), f"Resumen_VV_{mes_vv}.xlsx")
-                    st.session_state['res_vv'] = res_vv; st.session_state['mes_vv'] = mes_vv
+                    st.session_state['res_vv'] = res_vv
 
-        with tabs_v[1]:
-            if 'res_vv' in st.session_state:
-                dv = st.session_state['res_vv']
-                kv1, kv2, kv3, kv4 = st.columns(4)
-                kv1.metric("Bultos", f"{dv['BULTOS'].sum():,.0f}"); kv2.metric("Prep.", f"$ {dv['TOTAL_PREPARACION'].sum():,.2f}"); kv3.metric("Trans.", f"$ {dv['TOTAL_TRANSPORTE'].sum():,.2f}"); kv4.metric("Total Final", f"$ {dv['TOTAL_FINAL'].sum():,.2f}")
-                st.divider()
-                st.download_button("📥 Descargar Detalle VV", format_excel(dv), f"Detalle_VV_{st.session_state['mes_vv']}.xlsx")
-                st.dataframe(dv, use_container_width=True)
+    with tabs_v[1]:
+        if 'res_vv' in st.session_state:
+            dv = st.session_state['res_vv']
+            kv1, kv2, kv3, kv4 = st.columns(4)
+            kv1.metric("Bultos", f"{dv['BULTOS'].sum():,.0f}"); kv2.metric("Prep.", f"$ {dv['TOTAL_PREPARACION'].sum():,.2f}"); kv3.metric("Trans.", f"$ {dv['TOTAL_TRANSPORTE'].sum():,.2f}"); kv4.metric("Total Final", f"$ {dv['TOTAL_FINAL'].sum():,.2f}")
+            st.download_button("📥 Descargar Detalle VV", format_excel(dv), "Detalle_VV.xlsx")
+            st.dataframe(dv, use_container_width=True)
 
-# --- CONFIGURACIÓN DE MAESTROS (LOGICA SEPARADA POR PANTALLA) ---
+# CONFIGURACIÓN (REUTILIZABLE)
 if st.session_state['pagina_actual'] != "inicio":
-    current_tabs = tabs if st.session_state['pagina_actual'] == "sistema" else tabs_v
-    with current_tabs[2]:
+    current_tab = tabs[2] if st.session_state['pagina_actual'] == "sistema" else tabs_v[2]
+    with current_tab:
         st.header("⚙️ Maestros")
         ca, cb = st.columns(2)
         p_gp = PATH_GP if st.session_state['pagina_actual'] == "sistema" else PATH_GP_VV
