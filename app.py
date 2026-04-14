@@ -254,6 +254,7 @@ elif st.session_state['pagina_actual'] == "sistema":
 # ---------------------------------------------------------
 # PANTALLA 3: SISTEMA REPROGRAMA (ESPEJO VV)
 # ---------------------------------------------------------
+
 elif st.session_state['pagina_actual'] == "sistema_reprograma":
     if st.sidebar.button("⬅️ Volver al Menú Principal"):
         st.session_state['pagina_actual'] = "inicio"
@@ -313,4 +314,102 @@ elif st.session_state['pagina_actual'] == "sistema_reprograma":
                         
                         # Resumen por GP con Subtotales
                         summary = res.groupby('GP')['SUBTOTAL'].sum().reset_index()
-                        summary.columns = ['GP', 'SUB
+                        summary.columns = ['GP', 'SUBTOTAL VV']
+                        summary['IVA 15%'] = summary['SUBTOTAL VV'] * 0.15
+                        summary['TOTAL GENERAL'] = summary['SUBTOTAL VV'] + summary['IVA 15%']
+                        
+                        summary_f = pd.concat([summary, pd.DataFrame([{
+                            'GP': '--- TOTALES ---', 
+                            'SUBTOTAL VV': summary['SUBTOTAL VV'].sum(), 
+                            'IVA 15%': summary['IVA 15%'].sum(), 
+                            'TOTAL GENERAL': summary['TOTAL GENERAL'].sum()
+                        }])], ignore_index=True)
+                        
+                        st.table(summary_f.style.format(subset=summary_f.columns[1:], formatter="{:,.2f}"))
+                        st.download_button("📥 Descargar Resumen VV", format_excel(summary_f), f"Resumen_VV_{mes_sel}.xlsx")
+
+                        if st.button("💾 Guardar Reprograma en Historial"):
+                            res['MES_PROCESO'] = mes_sel
+                            if os.path.exists(HISTORICO_REPRO_FILE):
+                                df_h_old = pd.read_csv(HISTORICO_REPRO_FILE)
+                                df_h_old = df_h_old[df_h_old['MES_PROCESO'] != mes_sel]
+                                pd.concat([df_h_old, res]).to_csv(HISTORICO_REPRO_FILE, index=False)
+                            else:
+                                res.to_csv(HISTORICO_REPRO_FILE, index=False)
+                            st.success("Guardado correctamente en base Reprograma.")
+
+                        st.session_state['res_repro'] = res
+                        st.session_state['mes_repro_actual'] = mes_sel
+
+    with tabs[1]: # TAB 1: DETALLE VV (KPIs Y FILTROS)
+        if 'res_repro' in st.session_state:
+            df_full_r = st.session_state['res_repro']
+            
+            st.markdown("### 🔍 Análisis Detallado VV")
+            f1, f2 = st.columns(2)
+            with f1: sel_gp_r = st.multiselect("Filtrar por GP", options=sorted(df_full_r['GP'].unique()), key="f_gp_r")
+            with f2: sel_zona_r = st.multiselect("Filtrar por Zona", options=sorted(df_full_r['DESCRIPCIÓN ZONA'].unique()), key="f_zona_r")
+
+            df_v_r = df_full_r.copy()
+            if sel_gp_r: df_v_r = df_v_r[df_v_r['GP'].isin(sel_gp_r)]
+            if sel_zona_r: df_v_r = df_v_r[df_v_r['DESCRIPCIÓN ZONA'].isin(sel_zona_r)]
+
+            # KPIs DINÁMICOS
+            k1, k2, k3, k4 = st.columns(4)
+            sub_val = df_v_r['SUBTOTAL'].sum()
+            iva_val = sub_val * 0.15
+            
+            k1.metric("Bultos Procesados", f"{df_v_r['BULTOS'].sum():,.0f}")
+            k2.metric("Subtotal Neto", f"$ {sub_val:,.2f}")
+            k3.metric("IVA (15%)", f"$ {iva_val:,.2f}")
+            k4.metric("Total con IVA", f"$ {df_v_r['TOTAL_FINAL'].sum():,.2f}")
+            
+            st.divider()
+            st.download_button("📥 Descargar Detalle Filtrado VV", format_excel(df_v_r), f"Detalle_VV_{st.session_state['mes_repro_actual']}.xlsx")
+            st.dataframe(df_v_r, use_container_width=True)
+
+    with tabs[2]: # TAB 2: CONFIGURACIÓN MAESTROS REPRO
+        st.header("⚙️ Gestión de Maestros Reprograma")
+        ca, cb = st.columns(2)
+        with ca:
+            ug = st.file_uploader("Actualizar Maestro GP (Repro)", type=['csv','xlsx'], key="up_gp_r_tab")
+            if ug:
+                d = leer_archivo(ug)
+                if d is not None: d.to_csv(PATH_GP_REPRO, index=False); st.success("Maestro GP Reprograma actualizado.")
+        with cb:
+            uc = st.file_uploader("Actualizar Maestro Costos (Repro)", type=['csv','xlsx'], key="up_co_r_tab")
+            if uc:
+                d = leer_archivo(uc)
+                if d is not None: d.to_csv(PATH_COSTOS_REPRO, index=False); st.success("Maestro Costos Reprograma actualizado.")
+
+    with tabs[3]: # TAB 3: HISTORIAL VV
+        st.header("🗄️ Consulta Histórica VV")
+        if os.path.exists(HISTORICO_REPRO_FILE):
+            df_h = pd.read_csv(HISTORICO_REPRO_FILE)
+            # Asegurar tipos numéricos para KPIs históricos
+            for c in ['SUBTOTAL', 'TOTAL_FINAL', 'BULTOS']:
+                if c in df_h.columns: df_h[c] = pd.to_numeric(df_h[c], errors='coerce').fillna(0)
+            
+            meses = sorted(df_h['MES_PROCESO'].dropna().unique())
+            if meses:
+                m_h = st.selectbox("Seleccionar Mes a Consultar:", meses, key="hist_repro_sel")
+                df_mostrar = df_h[df_h['MES_PROCESO'] == m_h]
+                
+                h1, h2, h3 = st.columns(3)
+                h1.metric("Bultos en Historial", f"{df_mostrar['BULTOS'].sum():,.0f}")
+                h2.metric("Total Facturado", f"$ {df_mostrar['TOTAL_FINAL'].sum():,.2f}")
+                h3.metric("Cant. Registros", len(df_mostrar))
+                
+                st.dataframe(df_mostrar, use_container_width=True)
+                
+                # Botón de borrado con estilo
+                st.markdown('<div class="small-btn">', unsafe_allow_html=True)
+                if st.button(f"🗑️ Eliminar historial {m_h}", key="del_repro_hist"):
+                    df_h = df_h[df_h['MES_PROCESO'] != m_h]
+                    df_h.to_csv(HISTORICO_REPRO_FILE, index=False)
+                    st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
+            else:
+                st.info("No hay datos guardados en el historial de Reprograma.")
+        else:
+            st.info("No se encontró el archivo de base histórica de Reprograma.")
