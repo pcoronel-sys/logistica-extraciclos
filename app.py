@@ -52,13 +52,16 @@ st.markdown(f"""
 if 'pagina_actual' not in st.session_state:
     st.session_state['pagina_actual'] = "inicio"
 
+# --- RUTAS ---
 PATH_GP = "master_gp.csv"
 PATH_COSTOS = "master_costos.csv"
 PATH_GP_VV = "master_gp_vv.csv"
 PATH_COSTOS_VV = "master_costos_vv.csv"
 HISTORICO_FILE = "base_historica_bago.csv"
 
+# --- FUNCIONES ---
 def cargar_maestro(path): return pd.read_csv(path) if os.path.exists(path) else None
+
 def leer_archivo(archivo):
     try:
         if archivo.name.lower().endswith(('.xlsx', '.xls')): return pd.read_excel(archivo)
@@ -162,6 +165,9 @@ elif st.session_state['pagina_actual'] == "sistema":
     with tabs[1]: 
         if 'res_actual' in st.session_state:
             df_v = st.session_state['res_actual']
+            k1, k2, k3, k4 = st.columns(4)
+            k1.metric("Bultos", f"{df_v['BULTOS'].sum():,.0f}"); k2.metric("Prep.", f"$ {df_v['TOTAL_PREPARACION'].sum():,.2f}"); k3.metric("Trans.", f"$ {df_v['TOTAL_TRANSPORTE'].sum():,.2f}"); k4.metric("Total Final", f"$ {df_v['TOTAL_FINAL'].sum():,.2f}")
+            st.divider()
             st.download_button("📥 Descargar Detalle (Excel)", descargar_excel(df_v), "Detalle_ExtraCiclos.xlsx")
             st.dataframe(df_v, use_container_width=True)
 
