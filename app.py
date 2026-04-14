@@ -1,4 +1,4 @@
-import streamlit st
+import streamlit as st
 import pandas as pd
 import os
 import io
@@ -65,7 +65,6 @@ def leer_archivo(archivo):
         return pd.read_csv(archivo, encoding='latin-1')
     except: return None
 
-# Función de descarga corregida (usando motor por defecto)
 def descargar_excel(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
