@@ -420,13 +420,13 @@ if st.session_state['pagina_actual'] != "inicio":
             height: 5px !important;
             width: 5px !important;
             font-size: 0.9rem !important;
-            border-radius: 15px !important;
+            border-radius: 25px !important;
         }
         </style>
         """, unsafe_allow_html=True)
 
     # Ajuste de columnas para pegarlo a la derecha
-    cols = st.columns([60, 1.5]) 
+    cols = st.columns([50, 1.5]) 
     with cols[1]:
         st.markdown('<div class="btn-derecha">', unsafe_allow_html=True)
         if st.button("🏠", key="btn_inicio_dinamico"):
