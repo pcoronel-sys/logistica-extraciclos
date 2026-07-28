@@ -599,10 +599,10 @@ if st.session_state['pagina_actual'] != "inicio":
     st.markdown("""
         <style>
         .btn-derecha button {
-            height: 45px !important;
-            width: 45px !important;
+            height: 60px !important;
+            width: 60px !important;
             font-size: 0.9rem !important;
-            border-radius: 55px !important;
+            border-radius: 70px !important;
         }
         </style>
         """, unsafe_allow_html=True)
