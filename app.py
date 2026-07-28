@@ -13,7 +13,7 @@ PATH_GP_REPRO = "master_gp_repro.csv"
 PATH_COSTOS_REPRO = "master_costos_repro.csv"
 HISTORICO_REPRO_FILE = "base_historica_repro.csv"
 
-# --- RUTAS NUEVO MÓDULO: CÁLCULO CANTIDAD ---
+# --- RUTAS TERCER MÓDULO: CÁLCULO CANTIDAD ---
 PATH_GP_CANTIDAD = "master_gp_cantidad.csv"
 HISTORICO_CANTIDAD_FILE = "base_historica_cantidad.csv"
 
@@ -221,16 +221,28 @@ elif st.session_state['pagina_actual'] == "sistema":
     with tabs[2]: # CONFIGURACIÓN
         st.header("⚙️ Maestros")
         ca, cb = st.columns(2)
+        m_actualizado = False
         with ca:
-            ug = st.file_uploader("Cargar GP", type=['csv','xlsx'])
+            ug = st.file_uploader("Cargar GP", type=['csv','xlsx'], key="up_gp_extra")
             if ug:
                 d = leer_archivo(ug)
-                if d is not None: d.to_csv(PATH_GP, index=False); st.success("GP OK")
+                if d is not None: 
+                    d.to_csv(PATH_GP, index=False)
+                    st.success("GP OK")
+                    m_actualizado = True
         with cb:
-            uc = st.file_uploader("Cargar Costos", type=['csv','xlsx'])
+            uc = st.file_uploader("Cargar Costos", type=['csv','xlsx'], key="up_costos_extra")
             if uc:
                 d = leer_archivo(uc)
-                if d is not None: d.to_csv(PATH_COSTOS, index=False); st.success("Costos OK")
+                if d is not None: 
+                    d.to_csv(PATH_COSTOS, index=False)
+                    st.success("Costos OK")
+                    m_actualizado = True
+
+        if m_actualizado or os.path.exists(PATH_GP) or os.path.exists(PATH_COSTOS):
+            st.divider()
+            if st.button("🔄 Actualizar Datos y Continuar", key="btn_refresco_extra"):
+                st.rerun()
 
     with tabs[3]: # HISTORIAL
         st.header("🗄️ Historial")
@@ -381,16 +393,28 @@ elif st.session_state['pagina_actual'] == "sistema_reprograma":
     with tabs[2]: # TAB 2: CONFIGURACIÓN
         st.header("⚙️ Gestión de Maestros Reprograma")
         ca, cb = st.columns(2)
+        m_repro_actualizado = False
         with ca:
             ug = st.file_uploader("Actualizar Maestro GP (Repro)", type=['csv','xlsx'], key="up_gp_r_tab")
             if ug:
                 d = leer_archivo(ug)
-                if d is not None: d.to_csv(PATH_GP_REPRO, index=False); st.success("GP Reprograma OK")
+                if d is not None: 
+                    d.to_csv(PATH_GP_REPRO, index=False)
+                    st.success("GP Reprograma OK")
+                    m_repro_actualizado = True
         with cb:
             uc = st.file_uploader("Actualizar Maestro Costos (Repro)", type=['csv','xlsx'], key="up_co_r_tab")
             if uc:
                 d = leer_archivo(uc)
-                if d is not None: d.to_csv(PATH_COSTOS_REPRO, index=False); st.success("Costos Reprograma OK")
+                if d is not None: 
+                    d.to_csv(PATH_COSTOS_REPRO, index=False)
+                    st.success("Costos Reprograma OK")
+                    m_repro_actualizado = True
+
+        if m_repro_actualizado or os.path.exists(PATH_GP_REPRO) or os.path.exists(PATH_COSTOS_REPRO):
+            st.divider()
+            if st.button("🔄 Actualizar Datos y Continuar", key="btn_refresco_repro"):
+                st.rerun()
 
     with tabs[3]: # TAB 3: HISTORIAL
         st.header("🗄️ Consulta Histórica VV")
@@ -507,7 +531,7 @@ elif st.session_state['pagina_actual'] == "sistema_cantidad":
                         st.session_state['res_cantidad'] = res[cols_existentes]
                         st.session_state['mes_cantidad_actual'] = mes_sel
 
-    with tabs[1]: # DETALLE CANTIDADES (REEMPLAZADA COLUMNA CANTIDAD REPETIDA POR DESCRIPCION)
+    with tabs[1]: # DETALLE CANTIDADES
         if 'res_cantidad' in st.session_state:
             df_full_c = st.session_state['res_cantidad']
             
@@ -529,7 +553,7 @@ elif st.session_state['pagina_actual'] == "sistema_cantidad":
             st.download_button("📥 Descargar Detalle Cantidades", format_excel(df_v_c), f"Detalle_Cantidades_{st.session_state['mes_cantidad_actual']}.xlsx")
             st.dataframe(df_v_c, use_container_width=True)
 
-    with tabs[2]: # CONFIGURACIÓN MAESTRO CON BOTÓN DE ACTUALIZACIÓN INSTANTÁNEA
+    with tabs[2]: # CONFIGURACIÓN MAESTRO
         st.header("⚙️ Configuración Maestro GP (Cantidad)")
         ug_cant = st.file_uploader("Cargar/Actualizar Maestro GP (Código, GP, Tipo, Descripción)", type=['csv','xlsx'], key="up_gp_cant_tab")
         if ug_cant:
@@ -537,10 +561,11 @@ elif st.session_state['pagina_actual'] == "sistema_cantidad":
             if d is not None:
                 d.to_csv(PATH_GP_CANTIDAD, index=False)
                 st.success("✅ Maestro GP cargado/guardado con éxito.")
-                
-                # BOTÓN DE ACTUALIZACIÓN RÁPIDA SIN SALIR
-                if st.button("🔄 Actualizar Datos y Continuar"):
-                    st.rerun()
+
+        if os.path.exists(PATH_GP_CANTIDAD):
+            st.divider()
+            if st.button("🔄 Actualizar Datos y Continuar", key="btn_refresco_cant"):
+                st.rerun()
 
     with tabs[3]: # HISTORIAL
         st.header("🗄️ Historial Cantidades")
