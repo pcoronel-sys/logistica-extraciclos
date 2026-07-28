@@ -97,15 +97,15 @@ if st.session_state['pagina_actual'] == "inicio":
     
     _, col_l, col_c, col_r, _ = st.columns([4.5, 2.3, 2.3, 2.3, 4.5])
     with col_l:
-        if st.button("\n\n🧾EXTRA CICLOS"):
+        if st.button("\n\n🧾CÁLCULO EXTRA CICLOS"):
             st.session_state['pagina_actual'] = "sistema" 
             st.rerun()
     with col_c:
-        if st.button("\n\n🧾VISITA VIRTUAL"):
+        if st.button("\n\n🧾CÁLCULO VISITA VIRTUAL"):
             st.session_state['pagina_actual'] = "sistema_reprograma" 
             st.rerun()
     with col_r:
-        if st.button("\n\n📦CÁLCULO CANTIDAD"):
+        if st.button("\n\n🧾CÁLCULO CANTIDAD"):
             st.session_state['pagina_actual'] = "sistema_cantidad"
             st.rerun()
 
