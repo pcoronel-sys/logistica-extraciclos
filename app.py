@@ -608,8 +608,8 @@ if st.session_state['pagina_actual'] != "inicio":
         
         /* Estilo exclusivo del botón de inicio */
         .btn-derecha > div.stButton > button {
-            width: 120px !important;        /* 👈 MODIFICA EL ANCHO AQUÍ */
-            height: 42px !important;        /* 👈 ALTO DEL BOTÓN */
+            width: 150px !important;        /* 👈 MODIFICA EL ANCHO AQUÍ */
+            height: 45px !important;        /* 👈 ALTO DEL BOTÓN */
             min-height: 42px !important;
             padding: 5px 12px !important;
             font-size: 1rem !important;
