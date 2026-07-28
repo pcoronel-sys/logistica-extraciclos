@@ -20,7 +20,7 @@ HISTORICO_CANTIDAD_FILE = "base_historica_cantidad.csv"
 # 1. CONFIGURACIÓN DE PÁGINA
 st.set_page_config(page_title="Laboratorios Bagó - Conciliación Extra Ciclos", layout="wide", page_icon="🧪")
 
-# --- DISEÑO ESTÉTICO UI/UX PRO (ESTILOS BAGO & GLASS) ---
+# --- DISEÑO ESTÉTICO UI/UX PRO (ESTILOS BAGO) ---
 MAGENTA_BAGO = "#C7006A" 
 MAGENTA_OSCURO = "#8A004A"
 
@@ -31,8 +31,8 @@ st.markdown(f"""
     .welcome-text {{ text-align: center; color: #888; font-size: 1.2rem; font-weight: 300; letter-spacing: 2px; text-transform: uppercase; margin-bottom: -10px; }}
     .main-title {{ color: {MAGENTA_BAGO}; font-size: 5rem !important; font-weight: 900 !important; text-align: center; margin-top: 0px; letter-spacing: -4px; filter: drop-shadow(0px 10px 15px rgba(199, 0, 106, 0.2)); line-height: 1; }}
     
-    /* 1. ESTILO Y TAMAÑO PARA LAS TARJETAS DEL MENÚ PRINCIPAL (GLASSMORPHISM) */
-    .menu-card div.stButton > button {{ 
+    /* GLASSMORPHISM Y EFECTO HOVER EXCLUSIVO PARA TARJETAS DEL MENÚ INICIO */
+    div[data-testid="stColumn"] > div [element-id="btn-menu-card"] button {{
         background: rgba(250, 255, 255, 0.7) !important; 
         backdrop-filter: blur(15px) !important; 
         color: #333 !important; 
@@ -43,18 +43,25 @@ st.markdown(f"""
         box-shadow: 0 20px 40px rgba(0,0,0,0.05) !important; 
         transition: all 0.6s cubic-bezier(0.165, 0.84, 0.44, 1.0) !important; 
         font-size: 1.4rem !important; 
-        font-weight: 800 !important; 
+        font-weight: 800 !important;
     }}
-    .menu-card div.stButton > button:hover {{ 
+    div[data-testid="stColumn"] > div [element-id="btn-menu-card"] button:hover {{ 
         background: linear-gradient(135deg, {MAGENTA_BAGO} 0%, {MAGENTA_OSCURO} 100%) !important; 
         color: white !important; 
         transform: translateY(-15px) scale(1.03) !important; 
     }}
-    
-    /* 2. ESTILO EXCLUSIVO PARA EL BOTÓN DE INICIO AL LADO DE PESTAÑAS */
-    .btn-inicio-custom div.stButton > button {{
+
+    /* BOTÓN FLOTANTE DE INICIO AL LADO DE LAS PESTAÑAS (TAMAÑO CONTROLADO EXCLUSIVAMENTE AQUÍ) */
+    #btn-inicio-flotante {{
+        position: fixed;
+        top: 18px;
+        right: 30px;
+        z-index: 999999;
+        width: 110px !important;            /* 👈 AQUÍ CAMBIAS EL ANCHO A TU GUSTO */
+    }}
+    #btn-inicio-flotante button {{
+        width: 100% !important;
         height: 38px !important;
-        width: 110px !important;            /* 👈 CAMBIA EL ANCHO AQUÍ A TU GUSTO */
         min-height: 38px !important;
         padding: 0px !important;
         font-size: 0.95rem !important;
@@ -63,14 +70,14 @@ st.markdown(f"""
         background: #ffffff !important;
         color: #333333 !important;
         border: 1px solid #d0d0d0 !important;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.08) !important;
-        margin-top: 5px !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.12) !important;
+        transition: all 0.3s ease !important;
     }}
-    .btn-inicio-custom div.stButton > button:hover {{
+    #btn-inicio-flotante button:hover {{
         background: {MAGENTA_BAGO} !important;
         color: white !important;
         border-color: {MAGENTA_BAGO} !important;
-        transform: none !important;
+        transform: scale(1.05) !important;
     }}
 
     [data-testid="stSidebar"] {{ background-color: white !important; border-right: 1px solid #eee; }}
@@ -106,16 +113,6 @@ def format_excel(df):
         df.to_excel(writer, index=False, sheet_name='Datos')
     return output.getvalue()
 
-def render_encabezado_mod():
-    c_tabs, c_btn = st.columns([10, 2])
-    with c_btn:
-        st.markdown('<div class="btn-inicio-custom">', unsafe_allow_html=True)
-        if st.button("🏠 Inicio", key=f"btn_nav_home_{st.session_state['pagina_actual']}"):
-            st.session_state['pagina_actual'] = "inicio"
-            st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
-    return c_tabs
-
 hora_ajustada = (datetime.now() - timedelta(hours=5)).hour
 saludo_txt = "☀️ Buenos días" if 5 <= hora_ajustada < 12 else "🌤️ Buenas tardes" if 12 <= hora_ajustada < 19 else "🌙 Buenas noches"
 
@@ -130,20 +127,20 @@ if st.session_state['pagina_actual'] == "inicio":
     
     _, col_l, col_c, col_r, _ = st.columns([4.5, 2.3, 2.3, 2.3, 4.5])
     with col_l:
-        st.markdown('<div class="menu-card">', unsafe_allow_html=True)
-        if st.button("\n\n🧾EXTRA CICLOS"):
+        st.markdown('<div element-id="btn-menu-card">', unsafe_allow_html=True)
+        if st.button("\n\n🧾EXTRA CICLOS", key="btn_m1"):
             st.session_state['pagina_actual'] = "sistema" 
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
     with col_c:
-        st.markdown('<div class="menu-card">', unsafe_allow_html=True)
-        if st.button("\n\n🧾VISITA VIRTUAL"):
+        st.markdown('<div element-id="btn-menu-card">', unsafe_allow_html=True)
+        if st.button("\n\n🧾VISITA VIRTUAL", key="btn_m2"):
             st.session_state['pagina_actual'] = "sistema_reprograma" 
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
     with col_r:
-        st.markdown('<div class="menu-card">', unsafe_allow_html=True)
-        if st.button("\n\n📦CÁLCULO CANTIDAD"):
+        st.markdown('<div element-id="btn-menu-card">', unsafe_allow_html=True)
+        if st.button("\n\n📦CÁLCULO CANTIDAD", key="btn_m3"):
             st.session_state['pagina_actual'] = "sistema_cantidad"
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
@@ -159,9 +156,7 @@ elif st.session_state['pagina_actual'] == "sistema":
     m_gp = cargar_maestro(PATH_GP)
     m_costos = cargar_maestro(PATH_COSTOS)
 
-    col_tabs = render_encabezado_mod()
-    with col_tabs:
-        tabs = st.tabs(["🚀 RESUMEN MENSUAL", "🔍 DETALLE ACTUAL", "⚙️ CONFIGURAR MAESTROS", "🗄️ HISTORIAL"])
+    tabs = st.tabs(["🚀 RESUMEN MENSUAL", "🔍 DETALLE ACTUAL", "⚙️ CONFIGURAR MAESTROS", "🗄️ HISTORIAL"])
 
     with tabs[0]: # LIQUIDACIÓN
         if m_gp is None or m_costos is None: 
@@ -323,9 +318,7 @@ elif st.session_state['pagina_actual'] == "sistema_reprograma":
     m_gp_r = cargar_maestro(PATH_GP_REPRO)
     m_costos_r = cargar_maestro(PATH_COSTOS_REPRO)
 
-    col_tabs = render_encabezado_mod()
-    with col_tabs:
-        tabs = st.tabs(["🚀 Resumen VV", "🔍 Detalle VV", "⚙️ Configurar Reprograma", "🗄️ Historial VV"])
+    tabs = st.tabs(["🚀 Resumen VV", "🔍 Detalle VV", "⚙️ Configurar Reprograma", "🗄️ Historial VV"])
 
     with tabs[0]: # TAB 0: LIQUIDACIÓN VV
         if m_gp_r is None or m_costos_r is None: 
@@ -496,9 +489,7 @@ elif st.session_state['pagina_actual'] == "sistema_cantidad":
 
     m_gp_cant = cargar_maestro(PATH_GP_CANTIDAD)
 
-    col_tabs = render_encabezado_mod()
-    with col_tabs:
-        tabs = st.tabs(["🚀 Resumen Cantidades", "🔍 Detalle Cantidades", "⚙️ Configurar Maestro GP", "🗄️ Historial Cantidades"])
+    tabs = st.tabs(["🚀 Resumen Cantidades", "🔍 Detalle Cantidades", "⚙️ Configurar Maestro GP", "🗄️ Historial Cantidades"])
 
     with tabs[0]: # RESUMEN CANTIDADES
         if m_gp_cant is None:
@@ -638,3 +629,11 @@ elif st.session_state['pagina_actual'] == "sistema_cantidad":
                 st.markdown('</div>', unsafe_allow_html=True)
         else:
             st.info("No hay historial de cantidades registrado.")
+
+# --- BOTÓN DE INICIO FLOTANTE (DERECHA SUPERIOR, TAMAÑO PERFECTO Y AISLADO) ---
+if st.session_state['pagina_actual'] != "inicio":
+    st.markdown('<div id="btn-inicio-flotante">', unsafe_allow_html=True)
+    if st.button("🏠 Inicio", key="btn_nav_home_main"):
+        st.session_state['pagina_actual'] = "inicio"
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
