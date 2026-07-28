@@ -31,7 +31,8 @@ st.markdown(f"""
     .welcome-text {{ text-align: center; color: #888; font-size: 1.2rem; font-weight: 300; letter-spacing: 2px; text-transform: uppercase; margin-bottom: -10px; }}
     .main-title {{ color: {MAGENTA_BAGO}; font-size: 5rem !important; font-weight: 900 !important; text-align: center; margin-top: 0px; letter-spacing: -4px; filter: drop-shadow(0px 10px 15px rgba(199, 0, 106, 0.2)); line-height: 1; }}
     
-    div.stButton > button {{ 
+    /* Botones de las tarjetas del menú principal */
+    .menu-card div.stButton > button {{ 
         background: rgba(250, 255, 255, 0.7) !important; 
         backdrop-filter: blur(15px) !important; 
         color: #333 !important; 
@@ -44,12 +45,34 @@ st.markdown(f"""
         font-size: 1.4rem !important; 
         font-weight: 800 !important; 
     }}
-    div.stButton > button:hover {{ 
+    .menu-card div.stButton > button:hover {{ 
         background: linear-gradient(135deg, {MAGENTA_BAGO} 0%, {MAGENTA_OSCURO} 100%) !important; 
         color: white !important; 
         transform: translateY(-15px) scale(1.03) !important; 
     }}
     
+    /* Botón compacto para la cabecera / pestañas */
+    .header-btn div.stButton > button {{
+        height: 40px !important;
+        width: 120px !important;            /* 👈 EDITA ESTE VALOR PARA CAMBIAR EL ANCHO */
+        min-height: 40px !important;
+        padding: 0px !important;
+        font-size: 0.95rem !important;
+        font-weight: 700 !important;
+        border-radius: 10px !important;
+        background: #ffffff !important;
+        color: #333 !important;
+        border: 1px solid #cccccc !important;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.08) !important;
+        margin-top: 5px !important;
+    }}
+    .header-btn div.stButton > button:hover {{
+        background: {MAGENTA_BAGO} !important;
+        color: white !important;
+        border-color: {MAGENTA_BAGO} !important;
+        transform: none !important;
+    }}
+
     [data-testid="stSidebar"] {{ background-color: white !important; border-right: 1px solid #eee; }}
     [data-testid="stTable"] thead tr th {{ background-color: #2C3E50 !important; color: white !important; font-weight: bold !important; }}
     div[data-testid="stMetric"] {{ background: white !important; border-radius: 20px !important; padding: 20px !important; border-left: 8px solid {MAGENTA_BAGO} !important; box-shadow: 0 10px 20px rgba(0,0,0,0.04) !important; }}
@@ -83,6 +106,16 @@ def format_excel(df):
         df.to_excel(writer, index=False, sheet_name='Datos')
     return output.getvalue()
 
+def render_encabezado_mod():
+    c_tabs, c_btn = st.columns([10, 2])
+    with c_btn:
+        st.markdown('<div class="header-btn">', unsafe_allow_html=True)
+        if st.button("🏠 Inicio", key=f"btn_nav_home_{st.session_state['pagina_actual']}"):
+            st.session_state['pagina_actual'] = "inicio"
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+    return c_tabs
+
 hora_ajustada = (datetime.now() - timedelta(hours=5)).hour
 saludo_txt = "☀️ Buenos días" if 5 <= hora_ajustada < 12 else "🌤️ Buenas tardes" if 12 <= hora_ajustada < 19 else "🌙 Buenas noches"
 
@@ -97,17 +130,23 @@ if st.session_state['pagina_actual'] == "inicio":
     
     _, col_l, col_c, col_r, _ = st.columns([4.5, 2.3, 2.3, 2.3, 4.5])
     with col_l:
-        if st.button("\n\n🧾CÁLCULO EXTRA CICLOS MM Y MP"):
+        st.markdown('<div class="menu-card">', unsafe_allow_html=True)
+        if st.button("\n\n🧾EXTRA CICLOS"):
             st.session_state['pagina_actual'] = "sistema" 
             st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
     with col_c:
-        if st.button("\n\n🧾CÁLCULO VISITA VIRTUAL"):
+        st.markdown('<div class="menu-card">', unsafe_allow_html=True)
+        if st.button("\n\n🧾VISITA VIRTUAL"):
             st.session_state['pagina_actual'] = "sistema_reprograma" 
             st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
     with col_r:
-        if st.button("\n\n🧾CÁLCULO CANTIDAD MM Y MP"):
+        st.markdown('<div class="menu-card">', unsafe_allow_html=True)
+        if st.button("\n\n📦CÁLCULO CANTIDAD"):
             st.session_state['pagina_actual'] = "sistema_cantidad"
             st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------------------------------------------------
 # PANTALLA 2: SISTEMA PRINCIPAL (EXTRA CICLOS)
@@ -120,7 +159,9 @@ elif st.session_state['pagina_actual'] == "sistema":
     m_gp = cargar_maestro(PATH_GP)
     m_costos = cargar_maestro(PATH_COSTOS)
 
-    tabs = st.tabs(["🚀 RESUMEN MENSUAL", "🔍 DETALLE ACTUAL", "⚙️ CONFIGURAR MAESTROS", "🗄️ HISTORIAL"])
+    col_tabs = render_encabezado_mod()
+    with col_tabs:
+        tabs = st.tabs(["🚀 RESUMEN MENSUAL", "🔍 DETALLE ACTUAL", "⚙️ CONFIGURAR MAESTROS", "🗄️ HISTORIAL"])
 
     with tabs[0]: # LIQUIDACIÓN
         if m_gp is None or m_costos is None: 
@@ -282,7 +323,9 @@ elif st.session_state['pagina_actual'] == "sistema_reprograma":
     m_gp_r = cargar_maestro(PATH_GP_REPRO)
     m_costos_r = cargar_maestro(PATH_COSTOS_REPRO)
 
-    tabs = st.tabs(["🚀 RESUMEN VV", "🔍 DETALLE VV", "⚙️ CONFIGURAR MAESTROS", "🗄️ HISTORIAL VV"])
+    col_tabs = render_encabezado_mod()
+    with col_tabs:
+        tabs = st.tabs(["🚀 Resumen VV", "🔍 Detalle VV", "⚙️ Configurar Reprograma", "🗄️ Historial VV"])
 
     with tabs[0]: # TAB 0: LIQUIDACIÓN VV
         if m_gp_r is None or m_costos_r is None: 
@@ -330,7 +373,7 @@ elif st.session_state['pagina_actual'] == "sistema_reprograma":
                         res['IVA_15'] = res['SUBTOTAL_NETO'] * 0.15
                         res['TOTAL_FINAL'] = res['SUBTOTAL_NETO'] + res['IVA_15']
 
-                        st.subheader(f"📋 RESUMEN VISITA VIRTUAL: {mes_sel}")
+                        st.subheader(f"📋 Resumen Visita Virtual: {mes_sel}")
                         
                         summary = res.groupby('GP').agg({
                             'TOTAL_PREPARACION': 'sum',
@@ -353,7 +396,7 @@ elif st.session_state['pagina_actual'] == "sistema_reprograma":
                         st.table(summary_f.style.format(subset=summary_f.columns[1:], formatter="{:,.2f}"))
                         st.download_button("📥 Descargar Resumen VV", format_excel(summary_f), f"Resumen_VV_{mes_sel}.xlsx")
 
-                        if st.button("💾 Guardar en Historial"):
+                        if st.button("💾 Guardar Reprograma en Historial"):
                             res['MES_PROCESO'] = mes_sel
                             if os.path.exists(HISTORICO_REPRO_FILE):
                                 df_h_old = pd.read_csv(HISTORICO_REPRO_FILE)
@@ -453,7 +496,9 @@ elif st.session_state['pagina_actual'] == "sistema_cantidad":
 
     m_gp_cant = cargar_maestro(PATH_GP_CANTIDAD)
 
-    tabs = st.tabs(["🚀 RESUMEN CANTIDADES", "🔍 DETALLE CANTIDADES", "⚙️ CONFIGURAR MAESTROS ", "🗄️ HISTORIAL CANTIDADES"])
+    col_tabs = render_encabezado_mod()
+    with col_tabs:
+        tabs = st.tabs(["🚀 Resumen Cantidades", "🔍 Detalle Cantidades", "⚙️ Configurar Maestro GP", "🗄️ Historial Cantidades"])
 
     with tabs[0]: # RESUMEN CANTIDADES
         if m_gp_cant is None:
@@ -593,49 +638,3 @@ elif st.session_state['pagina_actual'] == "sistema_cantidad":
                 st.markdown('</div>', unsafe_allow_html=True)
         else:
             st.info("No hay historial de cantidades registrado.")
-
-# --- BOTÓN DE REGRESO (SOLO VISIBLE FUERA DE INICIO) ---
-if st.session_state['pagina_actual'] != "inicio":
-    st.markdown("""
-        <style>
-        /* Contenedor flotante fijado en la esquina superior derecha */
-        .btn-flotante-derecha {
-            position: fixed !important;
-            top: 20px !important;            /* Altura desde la parte superior */
-            right: 25px !important;          /* Distancia desde el borde derecho */
-            z-index: 999999 !important;      /* Hace que flote por encima de todo */
-        }
-        
-        /* Estilo y tamaño del botón */
-        .btn-flotante-derecha > div.stButton > button {
-            width: 110px !important;         /* 👈 CAMBIA EL ANCHO AQUÍ */
-            height: 38px !important;         /* 👈 ALTO DEL BOTÓN */
-            min-height: 38px !important;
-            padding: 2px 10px !important;
-            font-size: 0.95rem !important;
-            font-weight: 600 !important;
-            border-radius: 12px !important;
-            background: #ffffff !important;
-            color: #333333 !important;
-            border: 1px solid #d0d0d0 !important;
-            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.15) !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-        }
-        
-        .btn-flotante-derecha > div.stButton > button:hover {
-            background: #C7006A !important;
-            color: white !important;
-            border-color: #C7006A !important;
-            transform: scale(1.05) !important;
-        }
-        </style>
-        """, unsafe_allow_html=True)
-
-    # Renderizado directo en la posición flotante
-    st.markdown('<div class="btn-flotante-derecha">', unsafe_allow_html=True)
-    if st.button("🏠 Inicio", key="btn_inicio_dinamico"):
-        st.session_state['pagina_actual'] = "inicio"
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
