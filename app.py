@@ -31,8 +31,8 @@ st.markdown(f"""
     .welcome-text {{ text-align: center; color: #888; font-size: 1.2rem; font-weight: 300; letter-spacing: 2px; text-transform: uppercase; margin-bottom: -10px; }}
     .main-title {{ color: {MAGENTA_BAGO}; font-size: 5rem !important; font-weight: 900 !important; text-align: center; margin-top: 0px; letter-spacing: -4px; filter: drop-shadow(0px 10px 15px rgba(199, 0, 106, 0.2)); line-height: 1; }}
     
-    /* 1. GLASSMORPHISM Y TAMAÑO EXCLUSIVO PARA BOTONES DEL MENÚ PRINCIPAL */
-    .menu-card button {{ 
+    /* GLASSMORPHISM Y TAMAÑO PARA LAS TARJETAS DEL MENÚ INICIO */
+    .menu-card div.stButton > button {{ 
         background: rgba(250, 255, 255, 0.7) !important; 
         backdrop-filter: blur(15px) !important; 
         color: #333 !important; 
@@ -45,41 +45,10 @@ st.markdown(f"""
         font-size: 1.4rem !important; 
         font-weight: 800 !important; 
     }}
-    .menu-card button:hover {{ 
+    .menu-card div.stButton > button:hover {{ 
         background: linear-gradient(135deg, {MAGENTA_BAGO} 0%, {MAGENTA_OSCURO} 100%) !important; 
         color: white !important; 
         transform: translateY(-15px) scale(1.03) !important; 
-    }}
-
-    /* 2. FIX DEFINITIVO DE POSICIONAMIENTO Y TAMAÑO PARA EL BOTÓN INICIO FLOTANTE (ARRIBA DERECHA) */
-    div[data-testid="stVerticalBlock"] > div:has(div.btn-inicio-container) {{
-        position: fixed !important;
-        top: 15px !important;
-        right: 25px !important;
-        z-index: 9999999 !important;
-        width: auto !important;
-    }}
-
-    .btn-inicio-container button {{
-        width: 110px !important;            /* 👈 PUEDES MODIFICAR EL ANCHO AQUÍ */
-        height: 38px !important;
-        min-height: 38px !important;
-        padding: 0px !important;
-        font-size: 0.95rem !important;
-        font-weight: 700 !important;
-        border-radius: 10px !important;
-        background: #ffffff !important;
-        color: #333333 !important;
-        border: 1px solid #d0d0d0 !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
-        transition: all 0.3s ease !important;
-    }}
-
-    .btn-inicio-container button:hover {{
-        background: {MAGENTA_BAGO} !important;
-        color: white !important;
-        border-color: {MAGENTA_BAGO} !important;
-        transform: scale(1.05) !important;
     }}
 
     [data-testid="stSidebar"] {{ background-color: white !important; border-right: 1px solid #eee; }}
@@ -99,6 +68,12 @@ st.markdown(f"""
 
 if 'pagina_actual' not in st.session_state:
     st.session_state['pagina_actual'] = "inicio"
+
+# --- CONTROL DE NAVEGACIÓN VÍA URL PARAMETERS ---
+if "nav" in st.query_params:
+    st.session_state['pagina_actual'] = st.query_params["nav"]
+    st.query_params.clear()
+    st.rerun()
 
 # --- FUNCIONES DE SOPORTE ---
 def cargar_maestro(path): return pd.read_csv(path) if os.path.exists(path) else None
@@ -580,7 +555,7 @@ elif st.session_state['pagina_actual'] == "sistema_cantidad":
 
             df_v_c = df_full_c.copy()
             if sel_gp_c: df_v_c = df_v_c[df_v_c['GP'].isin(sel_gp_c)]
-            if sel_tipo_c: df_v_c = df_tipo_c[df_v_c['TIPO'].isin(sel_tipo_c)]
+            if sel_tipo_c: df_v_c = df_v_c[df_v_c['TIPO'].isin(sel_tipo_c)]
 
             k1, k2, k3 = st.columns(3)
             k1.metric("MM DESPACHADO", f"{df_v_c[df_v_c['TIPO']=='MM']['CANTIDAD_DESPACHADA'].sum():,.0f}")
@@ -632,10 +607,30 @@ elif st.session_state['pagina_actual'] == "sistema_cantidad":
         else:
             st.info("No hay historial de cantidades registrado.")
 
-# --- BOTÓN INICIO FLOTANTE (ARRIBA A LA DERECHA SIN ROMPER NADA) ---
+# --- BOTÓN INICIO FLOTANTE (HTML PURO INDEPENDIENTE - ARRIBA DERECHA) ---
 if st.session_state['pagina_actual'] != "inicio":
-    st.markdown('<div class="btn-inicio-container">', unsafe_allow_html=True)
-    if st.button("🏠 Inicio", key="btn_nav_home_main"):
-        st.session_state['pagina_actual'] = "inicio"
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown(f"""
+        <a href="?nav=inicio" target="_self" style="
+            position: fixed;
+            top: 15px;
+            right: 25px;
+            z-index: 999999;
+            width: 110px;
+            height: 38px;
+            background-color: #ffffff;
+            color: #333333;
+            border: 1px solid #d0d0d0;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            font-family: inherit;
+            font-weight: 700;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+        " onmouseover="this.style.backgroundColor='{MAGENTA_BAGO}'; this.style.color='#ffffff'; this.style.borderColor='{MAGENTA_BAGO}';" onmouseout="this.style.backgroundColor='#ffffff'; this.style.color='#333333'; this.style.borderColor='#d0d0d0';">
+            🏠 Inicio
+        </a>
+    """, unsafe_allow_html=True)
