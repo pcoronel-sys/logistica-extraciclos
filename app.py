@@ -13,6 +13,10 @@ PATH_GP_REPRO = "master_gp_repro.csv"
 PATH_COSTOS_REPRO = "master_costos_repro.csv"
 HISTORICO_REPRO_FILE = "base_historica_repro.csv"
 
+# --- RUTAS NUEVO MÓDULO: CÁLCULO CANTIDAD ---
+PATH_GP_CANTIDAD = "master_gp_cantidad.csv"
+HISTORICO_CANTIDAD_FILE = "base_historica_cantidad.csv"
+
 # 1. CONFIGURACIÓN DE PÁGINA
 st.set_page_config(page_title="Laboratorios Bagó - Conciliación Extra Ciclos", layout="wide", page_icon="🧪")
 
@@ -91,14 +95,18 @@ if st.session_state['pagina_actual'] == "inicio":
     st.markdown('<p class="main-title">Laboratorios Bagó</p>', unsafe_allow_html=True)
     st.markdown("<h3 style='text-align:center; color:#555; font-weight:300; margin-bottom:60px;'>SISTEMA DE CONCILIACION DE EXTRA CICLOS </h3>", unsafe_allow_html=True)
     
-    _, col_l, col_r, _ = st.columns([6.5, 1.8, 1.8, 6.5])
+    _, col_l, col_c, col_r, _ = st.columns([4.5, 2.3, 2.3, 2.3, 4.5])
     with col_l:
         if st.button("\n\n🧾EXTRA CICLOS"):
             st.session_state['pagina_actual'] = "sistema" 
             st.rerun()
-    with col_r:
+    with col_c:
         if st.button("\n\n🧾VISITA VIRTUAL"):
             st.session_state['pagina_actual'] = "sistema_reprograma" 
+            st.rerun()
+    with col_r:
+        if st.button("\n\n📦CÁLCULO CANTIDAD"):
+            st.session_state['pagina_actual'] = "sistema_cantidad"
             st.rerun()
 
 # ---------------------------------------------------------
@@ -250,6 +258,7 @@ elif st.session_state['pagina_actual'] == "sistema":
                 st.info("No hay meses válidos en el historial.")
         else:
             st.info("Archivo historial no encontrado.")
+
 # ---------------------------------------------------------
 # PANTALLA 3: SISTEMA REPROGRAMA (ESPEJO VV CON DESGLOSE)
 # ---------------------------------------------------------
@@ -303,7 +312,6 @@ elif st.session_state['pagina_actual'] == "sistema_reprograma":
                         st.write("Códigos Faltantes:", res[res['GP'].isna()]['CODIGO'].unique())
                         st.write("Zonas Faltantes:", res[res['P_PREP'].isna()]['DESCRIPCIÓN ZONA'].unique())
                     else:
-                        # Cálculos desglosados
                         res['TOTAL_PREPARACION'] = res['P_PREP'] * res['BULTOS']
                         res['TOTAL_TRANSPORTE'] = res['P_TRANS'] * res['BULTOS']
                         res['SUBTOTAL_NETO'] = res['TOTAL_PREPARACION'] + res['TOTAL_TRANSPORTE']
@@ -312,7 +320,6 @@ elif st.session_state['pagina_actual'] == "sistema_reprograma":
 
                         st.subheader(f"📋 Resumen Visita Virtual: {mes_sel}")
                         
-                        # Resumen por GP con desglose de rubros
                         summary = res.groupby('GP').agg({
                             'TOTAL_PREPARACION': 'sum',
                             'TOTAL_TRANSPORTE': 'sum',
@@ -347,7 +354,7 @@ elif st.session_state['pagina_actual'] == "sistema_reprograma":
                         st.session_state['res_repro'] = res
                         st.session_state['mes_repro_actual'] = mes_sel
 
-    with tabs[1]: # TAB 1: DETALLE VV (KPIs DESGLOSADOS)
+    with tabs[1]: # TAB 1: DETALLE VV
         if 'res_repro' in st.session_state:
             df_full_r = st.session_state['res_repro']
             
@@ -360,7 +367,6 @@ elif st.session_state['pagina_actual'] == "sistema_reprograma":
             if sel_gp_r: df_v_r = df_v_r[df_v_r['GP'].isin(sel_gp_r)]
             if sel_zona_r: df_v_r = df_v_r[df_v_r['DESCRIPCIÓN ZONA'].isin(sel_zona_r)]
 
-            # KPIs DESGLOSADOS (Mismo estilo que Extra Ciclos)
             k1, k2, k3, k4, k5 = st.columns(5)
             k1.metric("BULTOS", f"{df_v_r['BULTOS'].sum():,.0f}")
             k2.metric("PREPARACION", f"$ {df_v_r['TOTAL_PREPARACION'].sum():,.2f}")
@@ -412,13 +418,146 @@ elif st.session_state['pagina_actual'] == "sistema_reprograma":
                     df_h.to_csv(HISTORICO_REPRO_FILE, index=False)
                     st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
+
+# ---------------------------------------------------------
+# PANTALLA 4: NUEVO MÓDULO (CÁLCULO CANTIDAD)
+# ---------------------------------------------------------
+elif st.session_state['pagina_actual'] == "sistema_cantidad":
+    if st.sidebar.button("⬅️ Volver al Menú Principal"):
+        st.session_state['pagina_actual'] = "inicio"
+        st.rerun()
+
+    m_gp_cant = cargar_maestro(PATH_GP_CANTIDAD)
+
+    tabs = st.tabs(["🚀 Resumen Cantidades", "🔍 Detalle Cantidades", "⚙️ Configurar Maestro GP", "🗄️ Historial Cantidades"])
+
+    with tabs[0]: # RESUMEN CANTIDADES
+        if m_gp_cant is None:
+            st.warning("⚠️ Cargue el Maestro GP en la pestaña Configurar.")
+        else:
+            c1, c2 = st.columns([1, 2])
+            with c1: 
+                mes_sel = st.selectbox("Mes Proceso", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], key="mes_cant_sel")
+            with c2: 
+                archivo = st.file_uploader("Subir Carga de Cantidades (Código y Cantidad)", type=['xlsx', 'xls', 'csv'], key="file_cant_up")
+
+            if archivo:
+                df_c = leer_archivo(archivo)
+                if df_c is not None:
+                    df_c.columns = df_c.columns.str.strip().str.upper()
+                    
+                    # Detectar columna de cantidad (CANTIDAD o BULTOS)
+                    col_cant = 'CANTIDAD' if 'CANTIDAD' in df_c.columns else 'BULTOS' if 'BULTOS' in df_c.columns else df_c.columns[1]
+                    col_cod = 'CODIGO' if 'CODIGO' in df_c.columns else df_c.columns[0]
+
+                    df_c['CODIGO'] = df_c[col_cod].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+                    df_c['CANTIDAD_DESPACHADA'] = pd.to_numeric(df_c[col_cant], errors='coerce').fillna(0)
+
+                    # Preparar Maestro GP Cantidad
+                    col_id_gp = [c for c in m_gp_cant.columns if 'CODIGO' in c.upper() or 'PRODUCTO' in c.upper()][0]
+                    m_gp_clean = m_gp_cant.copy()
+                    m_gp_clean.columns = m_gp_clean.columns.str.strip().str.upper()
+                    m_gp_clean[col_id_gp] = m_gp_clean[col_id_gp].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+                    m_gp_clean = m_gp_clean.drop_duplicates(subset=[col_id_gp])
+
+                    res = pd.merge(df_c, m_gp_clean[[col_id_gp, 'GP', 'TIPO']], left_on='CODIGO', right_on=col_id_gp, how='left')
+
+                    if res['GP'].isna().any():
+                        st.error("🛑 BLOQUEO: Existen códigos sin registrar en el Maestro GP.")
+                        st.write("Códigos Faltantes:", res[res['GP'].isna()]['CODIGO'].unique())
+                    else:
+                        st.subheader(f"📦 Resumen Cantidades Despachadas: {mes_sel}")
+
+                        summary = res.pivot_table(index='GP', columns='TIPO', values='CANTIDAD_DESPACHADA', aggfunc='sum').fillna(0)
+                        
+                        for col in ['MM', 'MP']:
+                            if col not in summary.columns: 
+                                summary[col] = 0.0
+
+                        summary['TOTAL DESPACHADO'] = summary['MM'] + summary['MP']
+
+                        summary_f = pd.concat([summary.reset_index(), pd.DataFrame([{'GP': '--- TOTALES ---', **summary.sum()}])], ignore_index=True)
+                        st.table(summary_f.style.format(subset=summary_f.columns[1:], formatter="{:,.0f}"))
+                        st.download_button("📥 DESCARGAR RESUMEN CANTIDADES", format_excel(summary_f), f"Resumen_Cantidades_{mes_sel}.xlsx")
+
+                        if st.button("💾 Guardar Cantidades en Historial"):
+                            res['MES_PROCESO'] = mes_sel
+                            if os.path.exists(HISTORICO_CANTIDAD_FILE):
+                                df_h_old = pd.read_csv(HISTORICO_CANTIDAD_FILE)
+                                df_h_old = df_h_old[df_h_old['MES_PROCESO'] != mes_sel]
+                                pd.concat([df_h_old, res]).to_csv(HISTORICO_CANTIDAD_FILE, index=False)
+                            else:
+                                res.to_csv(HISTORICO_CANTIDAD_FILE, index=False)
+                            st.success("Cantidades guardadas correctamente en historial.")
+
+                        st.session_state['res_cantidad'] = res
+                        st.session_state['mes_cantidad_actual'] = mes_sel
+
+    with tabs[1]: # DETALLE CANTIDADES
+        if 'res_cantidad' in st.session_state:
+            df_full_c = st.session_state['res_cantidad']
+            
+            st.markdown("### 🔍 Detalle Cantidades Despachadas")
+            f1, f2 = st.columns(2)
+            with f1: sel_gp_c = st.multiselect("Filtrar por GP", options=sorted(df_full_c['GP'].unique()), key="f_gp_c")
+            with f2: sel_tipo_c = st.multiselect("Filtrar por Tipo", options=sorted(df_full_c['TIPO'].unique()), key="f_tipo_c")
+
+            df_v_c = df_full_c.copy()
+            if sel_gp_c: df_v_c = df_v_c[df_v_c['GP'].isin(sel_gp_c)]
+            if sel_tipo_c: df_v_c = df_v_c[df_v_c['TIPO'].isin(sel_tipo_c)]
+
+            k1, k2, k3 = st.columns(3)
+            k1.metric("MM DESPACHADO", f"{df_v_c[df_v_c['TIPO']=='MM']['CANTIDAD_DESPACHADA'].sum():,.0f}")
+            k2.metric("MP DESPACHADO", f"{df_v_c[df_v_c['TIPO']=='MP']['CANTIDAD_DESPACHADA'].sum():,.0f}")
+            k3.metric("TOTAL DESPACHADO", f"{df_v_c['CANTIDAD_DESPACHADA'].sum():,.0f}")
+            
+            st.divider()
+            st.download_button("📥 Descargar Detalle Cantidades", format_excel(df_v_c), f"Detalle_Cantidades_{st.session_state['mes_cantidad_actual']}.xlsx")
+            st.dataframe(df_v_c, use_container_width=True)
+
+    with tabs[2]: # CONFIGURACIÓN MAESTRO
+        st.header("⚙️ Configuración Maestro GP (Cantidad)")
+        ug_cant = st.file_uploader("Cargar/Actualizar Maestro GP (Código, GP, Tipo)", type=['csv','xlsx'], key="up_gp_cant_tab")
+        if ug_cant:
+            d = leer_archivo(ug_cant)
+            if d is not None:
+                d.to_csv(PATH_GP_CANTIDAD, index=False)
+                st.success("Maestro GP para Cálculo Cantidad cargado exitosamente.")
+
+    with tabs[3]: # HISTORIAL
+        st.header("🗄️ Historial Cantidades")
+        if os.path.exists(HISTORICO_CANTIDAD_FILE):
+            df_h_c = pd.read_csv(HISTORICO_CANTIDAD_FILE)
+            if 'CANTIDAD_DESPACHADA' in df_h_c.columns:
+                df_h_c['CANTIDAD_DESPACHADA'] = pd.to_numeric(df_h_c['CANTIDAD_DESPACHADA'], errors='coerce').fillna(0)
+            
+            meses_c = sorted(df_h_c['MES_PROCESO'].dropna().unique())
+            if meses_c:
+                m_h_c = st.selectbox("Seleccionar Mes:", meses_c, key="hist_cant_sel")
+                df_mostrar_c = df_h_c[df_h_c['MES_PROCESO'] == m_h_c]
+                
+                h1, h2 = st.columns(2)
+                h1.metric("Total Cantidad Histórica", f"{df_mostrar_c['CANTIDAD_DESPACHADA'].sum():,.0f}")
+                h2.metric("Registros", len(df_mostrar_c))
+                
+                st.dataframe(df_mostrar_c, use_container_width=True)
+                
+                st.markdown('<div class="small-btn">', unsafe_allow_html=True)
+                if st.button(f"🗑️ Eliminar historial de {m_h_c}", key="del_cant_hist"):
+                    df_h_c = df_h_c[df_h_c['MES_PROCESO'] != m_h_c]
+                    df_h_c.to_csv(HISTORICO_CANTIDAD_FILE, index=False)
+                    st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
+        else:
+            st.info("No hay historial de cantidades registrado.")
+
 # --- BOTÓN DE REGRESO (SOLO VISIBLE FUERA DE INICIO) ---
 if st.session_state['pagina_actual'] != "inicio":
     st.markdown("""
         <style>
         .btn-derecha button {
-            height: 5px !important;
-            width: 5px !important;
+            height: 35px !important;
+            width: 35px !important;
             font-size: 0.9rem !important;
             border-radius: 25px !important;
         }
@@ -433,4 +572,3 @@ if st.session_state['pagina_actual'] != "inicio":
             st.session_state['pagina_actual'] = "inicio"
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
-
