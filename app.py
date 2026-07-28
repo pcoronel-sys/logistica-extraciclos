@@ -598,20 +598,34 @@ elif st.session_state['pagina_actual'] == "sistema_cantidad":
 if st.session_state['pagina_actual'] != "inicio":
     st.markdown("""
         <style>
-        .btn-derecha button {
-            height: 60px !important;
-            width: 60px !important;
-            font-size: 0.9rem !important;
-            border-radius: 70px !important;
+        /* Estilo exclusivo para ajustar el tamaño del botón de inicio */
+        div.btn-derecha > div.stButton > button {
+            width: 120px !important;       /* 👈 MODIFICA ESTE VALOR PARA CAMBIAR EL ANCHO */
+            height: 40px !important;       /* 👈 ALTO DEL BOTÓN */
+            min-height: 40px !important;
+            padding: 5px 10px !important;
+            font-size: 1rem !important;
+            border-radius: 12px !important; /* Bordes redondeados rectangulares */
+            background: #ffffff !important;
+            border: 1px solid #ccc !important;
+            box-shadow: 0px 4px 10px rgba(0,0,0,0.1) !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+        div.btn-derecha > div.stButton > button:hover {
+            background: #C7006A !important;
+            color: white !important;
+            transform: scale(1.05) !important;
         }
         </style>
         """, unsafe_allow_html=True)
 
-    # Ajuste de columnas para pegarlo a la derecha
-    cols = st.columns([50, 1.5]) 
-    with cols[1]:
+    # Contenedor alineado a la derecha
+    c_izq, c_der = st.columns([10, 2]) 
+    with c_der:
         st.markdown('<div class="btn-derecha">', unsafe_allow_html=True)
-        if st.button("🏠 INICIO ", key="btn_inicio_dinamico"):
+        if st.button("🏠 Inicio", key="btn_inicio_dinamico"):
             st.session_state['pagina_actual'] = "inicio"
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
