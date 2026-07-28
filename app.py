@@ -601,14 +601,14 @@ if st.session_state['pagina_actual'] != "inicio":
         /* Contenedor fijado en la esquina superior derecha */
         .btn-derecha {
             position: fixed !important;
-            top: 25px !important;           /* 👈 DISTANCIA DESDE ARRIBA */
-            right: 35px !important;         /* 👈 DISTANCIA DESDE LA DERECHA */
+            top: 155px !important;           /* 👈 DISTANCIA DESDE ARRIBA */
+            right: 95px !important;         /* 👈 DISTANCIA DESDE LA DERECHA */
             z-index: 999999 !important;     /* Asegura que quede por encima de todo */
         }
         
         /* Estilo exclusivo del botón de inicio */
         .btn-derecha > div.stButton > button {
-            width: 150px !important;        /* 👈 MODIFICA EL ANCHO AQUÍ */
+            width: 300px !important;        /* 👈 MODIFICA EL ANCHO AQUÍ */
             height: 45px !important;        /* 👈 ALTO DEL BOTÓN */
             min-height: 42px !important;
             padding: 5px 12px !important;
