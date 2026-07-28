@@ -598,32 +598,33 @@ elif st.session_state['pagina_actual'] == "sistema_cantidad":
 if st.session_state['pagina_actual'] != "inicio":
     st.markdown("""
         <style>
-        /* Contenedor fijado en la esquina superior derecha */
-        .btn-derecha {
+        /* Contenedor flotante fijado en la esquina superior derecha */
+        .btn-flotante-derecha {
             position: fixed !important;
-            top: 155px !important;           /* 👈 DISTANCIA DESDE ARRIBA */
-            right: 95px !important;         /* 👈 DISTANCIA DESDE LA DERECHA */
-            z-index: 999999 !important;     /* Asegura que quede por encima de todo */
+            top: 20px !important;            /* Altura desde la parte superior */
+            right: 25px !important;          /* Distancia desde el borde derecho */
+            z-index: 999999 !important;      /* Hace que flote por encima de todo */
         }
         
-        /* Estilo exclusivo del botón de inicio */
-        .btn-derecha > div.stButton > button {
-            width: 300px !important;        /* 👈 MODIFICA EL ANCHO AQUÍ */
-            height: 45px !important;        /* 👈 ALTO DEL BOTÓN */
-            min-height: 42px !important;
-            padding: 5px 12px !important;
-            font-size: 1rem !important;
+        /* Estilo y tamaño del botón */
+        .btn-flotante-derecha > div.stButton > button {
+            width: 110px !important;         /* 👈 CAMBIA EL ANCHO AQUÍ */
+            height: 38px !important;         /* 👈 ALTO DEL BOTÓN */
+            min-height: 38px !important;
+            padding: 2px 10px !important;
+            font-size: 0.95rem !important;
+            font-weight: 600 !important;
             border-radius: 12px !important;
             background: #ffffff !important;
             color: #333333 !important;
             border: 1px solid #d0d0d0 !important;
-            box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.15) !important;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.15) !important;
             display: flex !important;
             align-items: center !important;
             justify-content: center !important;
         }
         
-        .btn-derecha > div.stButton > button:hover {
+        .btn-flotante-derecha > div.stButton > button:hover {
             background: #C7006A !important;
             color: white !important;
             border-color: #C7006A !important;
@@ -632,8 +633,8 @@ if st.session_state['pagina_actual'] != "inicio":
         </style>
         """, unsafe_allow_html=True)
 
-    # Renderizado directo en el contenedor fijo
-    st.markdown('<div class="btn-derecha">', unsafe_allow_html=True)
+    # Renderizado directo en la posición flotante
+    st.markdown('<div class="btn-flotante-derecha">', unsafe_allow_html=True)
     if st.button("🏠 Inicio", key="btn_inicio_dinamico"):
         st.session_state['pagina_actual'] = "inicio"
         st.rerun()
