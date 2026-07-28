@@ -439,19 +439,25 @@ elif st.session_state['pagina_actual'] == "sistema_cantidad":
             with c1: 
                 mes_sel = st.selectbox("Mes Proceso", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], key="mes_cant_sel")
             with c2: 
-                archivo = st.file_uploader("Subir Carga de Cantidades (Código y Cantidad)", type=['xlsx', 'xls', 'csv'], key="file_cant_up")
+                archivo = st.file_uploader("Subir Carga de Cantidades", type=['xlsx', 'xls', 'csv'], key="file_cant_up")
 
             if archivo:
                 df_c = leer_archivo(archivo)
                 if df_c is not None:
                     df_c.columns = df_c.columns.str.strip().str.upper()
                     
-                    # Detectar columna de cantidad (CANTIDAD o BULTOS)
+                    # Identificar columnas en archivo de carga
                     col_cant = 'CANTIDAD' if 'CANTIDAD' in df_c.columns else 'BULTOS' if 'BULTOS' in df_c.columns else df_c.columns[1]
                     col_cod = 'CODIGO' if 'CODIGO' in df_c.columns else df_c.columns[0]
+                    col_desc = [c for c in df_c.columns if 'DESC' in c or 'NOMBRE' in c or 'PRODUCTO' in c]
 
                     df_c['CODIGO'] = df_c[col_cod].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                     df_c['CANTIDAD_DESPACHADA'] = pd.to_numeric(df_c[col_cant], errors='coerce').fillna(0)
+                    
+                    if col_desc:
+                        df_c['DESCRIPCION'] = df_c[col_desc[0]].astype(str).str.strip().str.upper()
+                    else:
+                        df_c['DESCRIPCION'] = "SIN DESCRIPCION"
 
                     # Preparar Maestro GP Cantidad
                     col_id_gp = [c for c in m_gp_cant.columns if 'CODIGO' in c.upper() or 'PRODUCTO' in c.upper()][0]
@@ -460,7 +466,11 @@ elif st.session_state['pagina_actual'] == "sistema_cantidad":
                     m_gp_clean[col_id_gp] = m_gp_clean[col_id_gp].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                     m_gp_clean = m_gp_clean.drop_duplicates(subset=[col_id_gp])
 
-                    res = pd.merge(df_c, m_gp_clean[[col_id_gp, 'GP', 'TIPO']], left_on='CODIGO', right_on=col_id_gp, how='left')
+                    cols_merge_m = [col_id_gp, 'GP', 'TIPO']
+                    if 'DESCRIPCION' in m_gp_clean.columns and 'DESCRIPCION' not in df_c.columns:
+                        cols_merge_m.append('DESCRIPCION')
+
+                    res = pd.merge(df_c, m_gp_clean[cols_merge_m], left_on='CODIGO', right_on=col_id_gp, how='left')
 
                     if res['GP'].isna().any():
                         st.error("🛑 BLOQUEO: Existen códigos sin registrar en el Maestro GP.")
@@ -490,10 +500,14 @@ elif st.session_state['pagina_actual'] == "sistema_cantidad":
                                 res.to_csv(HISTORICO_CANTIDAD_FILE, index=False)
                             st.success("Cantidades guardadas correctamente en historial.")
 
-                        st.session_state['res_cantidad'] = res
+                        # Guardar estructura limpia para el Detalle sin duplicados
+                        cols_detalle = ['CODIGO', 'DESCRIPCION', 'GP', 'TIPO', 'CANTIDAD_DESPACHADA']
+                        cols_existentes = [c for c in cols_detalle if c in res.columns]
+                        
+                        st.session_state['res_cantidad'] = res[cols_existentes]
                         st.session_state['mes_cantidad_actual'] = mes_sel
 
-    with tabs[1]: # DETALLE CANTIDADES
+    with tabs[1]: # DETALLE CANTIDADES (REEMPLAZADA COLUMNA CANTIDAD REPETIDA POR DESCRIPCION)
         if 'res_cantidad' in st.session_state:
             df_full_c = st.session_state['res_cantidad']
             
@@ -515,14 +529,18 @@ elif st.session_state['pagina_actual'] == "sistema_cantidad":
             st.download_button("📥 Descargar Detalle Cantidades", format_excel(df_v_c), f"Detalle_Cantidades_{st.session_state['mes_cantidad_actual']}.xlsx")
             st.dataframe(df_v_c, use_container_width=True)
 
-    with tabs[2]: # CONFIGURACIÓN MAESTRO
+    with tabs[2]: # CONFIGURACIÓN MAESTRO CON BOTÓN DE ACTUALIZACIÓN INSTANTÁNEA
         st.header("⚙️ Configuración Maestro GP (Cantidad)")
-        ug_cant = st.file_uploader("Cargar/Actualizar Maestro GP (Código, GP, Tipo)", type=['csv','xlsx'], key="up_gp_cant_tab")
+        ug_cant = st.file_uploader("Cargar/Actualizar Maestro GP (Código, GP, Tipo, Descripción)", type=['csv','xlsx'], key="up_gp_cant_tab")
         if ug_cant:
             d = leer_archivo(ug_cant)
             if d is not None:
                 d.to_csv(PATH_GP_CANTIDAD, index=False)
-                st.success("Maestro GP para Cálculo Cantidad cargado exitosamente.")
+                st.success("✅ Maestro GP cargado/guardado con éxito.")
+                
+                # BOTÓN DE ACTUALIZACIÓN RÁPIDA SIN SALIR
+                if st.button("🔄 Actualizar Datos y Continuar"):
+                    st.rerun()
 
     with tabs[3]: # HISTORIAL
         st.header("🗄️ Historial Cantidades")
