@@ -31,8 +31,8 @@ st.markdown(f"""
     .welcome-text {{ text-align: center; color: #888; font-size: 1.2rem; font-weight: 300; letter-spacing: 2px; text-transform: uppercase; margin-bottom: -10px; }}
     .main-title {{ color: {MAGENTA_BAGO}; font-size: 5rem !important; font-weight: 900 !important; text-align: center; margin-top: 0px; letter-spacing: -4px; filter: drop-shadow(0px 10px 15px rgba(199, 0, 106, 0.2)); line-height: 1; }}
     
-    /* GLASSMORPHISM Y EFECTO HOVER EXCLUSIVO PARA TARJETAS DEL MENÚ INICIO */
-    div[data-testid="stColumn"] > div [element-id="btn-menu-card"] button {{
+    /* 1. GLASSMORPHISM Y TAMAÑO EXCLUSIVO PARA BOTONES DEL MENÚ PRINCIPAL */
+    .menu-card button {{ 
         background: rgba(250, 255, 255, 0.7) !important; 
         backdrop-filter: blur(15px) !important; 
         color: #333 !important; 
@@ -43,24 +43,25 @@ st.markdown(f"""
         box-shadow: 0 20px 40px rgba(0,0,0,0.05) !important; 
         transition: all 0.6s cubic-bezier(0.165, 0.84, 0.44, 1.0) !important; 
         font-size: 1.4rem !important; 
-        font-weight: 800 !important;
+        font-weight: 800 !important; 
     }}
-    div[data-testid="stColumn"] > div [element-id="btn-menu-card"] button:hover {{ 
+    .menu-card button:hover {{ 
         background: linear-gradient(135deg, {MAGENTA_BAGO} 0%, {MAGENTA_OSCURO} 100%) !important; 
         color: white !important; 
         transform: translateY(-15px) scale(1.03) !important; 
     }}
 
-    /* BOTÓN FLOTANTE DE INICIO AL LADO DE LAS PESTAÑAS (TAMAÑO CONTROLADO EXCLUSIVAMENTE AQUÍ) */
-    #btn-inicio-flotante {{
-        position: fixed;
-        top: 18px;
-        right: 30px;
-        z-index: 999999;
-        width: 110px !important;            /* 👈 AQUÍ CAMBIAS EL ANCHO A TU GUSTO */
+    /* 2. FIX DEFINITIVO DE POSICIONAMIENTO Y TAMAÑO PARA EL BOTÓN INICIO FLOTANTE (ARRIBA DERECHA) */
+    div[data-testid="stVerticalBlock"] > div:has(div.btn-inicio-container) {{
+        position: fixed !important;
+        top: 15px !important;
+        right: 25px !important;
+        z-index: 9999999 !important;
+        width: auto !important;
     }}
-    #btn-inicio-flotante button {{
-        width: 100% !important;
+
+    .btn-inicio-container button {{
+        width: 110px !important;            /* 👈 PUEDES MODIFICAR EL ANCHO AQUÍ */
         height: 38px !important;
         min-height: 38px !important;
         padding: 0px !important;
@@ -70,10 +71,11 @@ st.markdown(f"""
         background: #ffffff !important;
         color: #333333 !important;
         border: 1px solid #d0d0d0 !important;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.12) !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
         transition: all 0.3s ease !important;
     }}
-    #btn-inicio-flotante button:hover {{
+
+    .btn-inicio-container button:hover {{
         background: {MAGENTA_BAGO} !important;
         color: white !important;
         border-color: {MAGENTA_BAGO} !important;
@@ -127,19 +129,19 @@ if st.session_state['pagina_actual'] == "inicio":
     
     _, col_l, col_c, col_r, _ = st.columns([4.5, 2.3, 2.3, 2.3, 4.5])
     with col_l:
-        st.markdown('<div element-id="btn-menu-card">', unsafe_allow_html=True)
+        st.markdown('<div class="menu-card">', unsafe_allow_html=True)
         if st.button("\n\n🧾EXTRA CICLOS", key="btn_m1"):
             st.session_state['pagina_actual'] = "sistema" 
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
     with col_c:
-        st.markdown('<div element-id="btn-menu-card">', unsafe_allow_html=True)
+        st.markdown('<div class="menu-card">', unsafe_allow_html=True)
         if st.button("\n\n🧾VISITA VIRTUAL", key="btn_m2"):
             st.session_state['pagina_actual'] = "sistema_reprograma" 
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
     with col_r:
-        st.markdown('<div element-id="btn-menu-card">', unsafe_allow_html=True)
+        st.markdown('<div class="menu-card">', unsafe_allow_html=True)
         if st.button("\n\n📦CÁLCULO CANTIDAD", key="btn_m3"):
             st.session_state['pagina_actual'] = "sistema_cantidad"
             st.rerun()
@@ -578,7 +580,7 @@ elif st.session_state['pagina_actual'] == "sistema_cantidad":
 
             df_v_c = df_full_c.copy()
             if sel_gp_c: df_v_c = df_v_c[df_v_c['GP'].isin(sel_gp_c)]
-            if sel_tipo_c: df_v_c = df_v_c[df_v_c['TIPO'].isin(sel_tipo_c)]
+            if sel_tipo_c: df_v_c = df_tipo_c[df_v_c['TIPO'].isin(sel_tipo_c)]
 
             k1, k2, k3 = st.columns(3)
             k1.metric("MM DESPACHADO", f"{df_v_c[df_v_c['TIPO']=='MM']['CANTIDAD_DESPACHADA'].sum():,.0f}")
@@ -630,9 +632,9 @@ elif st.session_state['pagina_actual'] == "sistema_cantidad":
         else:
             st.info("No hay historial de cantidades registrado.")
 
-# --- BOTÓN DE INICIO FLOTANTE (DERECHA SUPERIOR, TAMAÑO PERFECTO Y AISLADO) ---
+# --- BOTÓN INICIO FLOTANTE (ARRIBA A LA DERECHA SIN ROMPER NADA) ---
 if st.session_state['pagina_actual'] != "inicio":
-    st.markdown('<div id="btn-inicio-flotante">', unsafe_allow_html=True)
+    st.markdown('<div class="btn-inicio-container">', unsafe_allow_html=True)
     if st.button("🏠 Inicio", key="btn_nav_home_main"):
         st.session_state['pagina_actual'] = "inicio"
         st.rerun()
