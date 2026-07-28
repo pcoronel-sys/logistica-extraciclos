@@ -282,7 +282,7 @@ elif st.session_state['pagina_actual'] == "sistema_reprograma":
     m_gp_r = cargar_maestro(PATH_GP_REPRO)
     m_costos_r = cargar_maestro(PATH_COSTOS_REPRO)
 
-    tabs = st.tabs(["🚀 Resumen VV", "🔍 Detalle VV", "⚙️ Configurar Reprograma", "🗄️ Historial VV"])
+    tabs = st.tabs(["🚀 RESUMEN VV", "🔍 DETALLE VV", "⚙️ CONFIGURAR MAESTROS", "🗄️ HISTORIAL VV"])
 
     with tabs[0]: # TAB 0: LIQUIDACIÓN VV
         if m_gp_r is None or m_costos_r is None: 
@@ -330,7 +330,7 @@ elif st.session_state['pagina_actual'] == "sistema_reprograma":
                         res['IVA_15'] = res['SUBTOTAL_NETO'] * 0.15
                         res['TOTAL_FINAL'] = res['SUBTOTAL_NETO'] + res['IVA_15']
 
-                        st.subheader(f"📋 Resumen Visita Virtual: {mes_sel}")
+                        st.subheader(f"📋 RESUMEN VISITA VIRTUAL: {mes_sel}")
                         
                         summary = res.groupby('GP').agg({
                             'TOTAL_PREPARACION': 'sum',
@@ -353,7 +353,7 @@ elif st.session_state['pagina_actual'] == "sistema_reprograma":
                         st.table(summary_f.style.format(subset=summary_f.columns[1:], formatter="{:,.2f}"))
                         st.download_button("📥 Descargar Resumen VV", format_excel(summary_f), f"Resumen_VV_{mes_sel}.xlsx")
 
-                        if st.button("💾 Guardar Reprograma en Historial"):
+                        if st.button("💾 Guardar en Historial"):
                             res['MES_PROCESO'] = mes_sel
                             if os.path.exists(HISTORICO_REPRO_FILE):
                                 df_h_old = pd.read_csv(HISTORICO_REPRO_FILE)
@@ -453,7 +453,7 @@ elif st.session_state['pagina_actual'] == "sistema_cantidad":
 
     m_gp_cant = cargar_maestro(PATH_GP_CANTIDAD)
 
-    tabs = st.tabs(["🚀 Resumen Cantidades", "🔍 Detalle Cantidades", "⚙️ Configurar Maestro GP", "🗄️ Historial Cantidades"])
+    tabs = st.tabs(["🚀 RESUMEN CANTIDADES", "🔍 DETALLE CANTIDADES", "⚙️ CONFIGURAR MAESTROS ", "🗄️ HISTORIAL CANTIDADES"])
 
     with tabs[0]: # RESUMEN CANTIDADES
         if m_gp_cant is None:
@@ -599,10 +599,10 @@ if st.session_state['pagina_actual'] != "inicio":
     st.markdown("""
         <style>
         .btn-derecha button {
-            height: 35px !important;
-            width: 35px !important;
+            height: 45px !important;
+            width: 45px !important;
             font-size: 0.9rem !important;
-            border-radius: 25px !important;
+            border-radius: 55px !important;
         }
         </style>
         """, unsafe_allow_html=True)
