@@ -598,34 +598,43 @@ elif st.session_state['pagina_actual'] == "sistema_cantidad":
 if st.session_state['pagina_actual'] != "inicio":
     st.markdown("""
         <style>
-        /* Estilo exclusivo para ajustar el tamaño del botón de inicio */
-        div.btn-derecha > div.stButton > button {
-            width: 120px !important;       /* 👈 MODIFICA ESTE VALOR PARA CAMBIAR EL ANCHO */
-            height: 40px !important;       /* 👈 ALTO DEL BOTÓN */
-            min-height: 40px !important;
-            padding: 5px 10px !important;
+        /* Contenedor fijado en la esquina superior derecha */
+        .btn-derecha {
+            position: fixed !important;
+            top: 25px !important;           /* 👈 DISTANCIA DESDE ARRIBA */
+            right: 35px !important;         /* 👈 DISTANCIA DESDE LA DERECHA */
+            z-index: 999999 !important;     /* Asegura que quede por encima de todo */
+        }
+        
+        /* Estilo exclusivo del botón de inicio */
+        .btn-derecha > div.stButton > button {
+            width: 120px !important;        /* 👈 MODIFICA EL ANCHO AQUÍ */
+            height: 42px !important;        /* 👈 ALTO DEL BOTÓN */
+            min-height: 42px !important;
+            padding: 5px 12px !important;
             font-size: 1rem !important;
-            border-radius: 12px !important; /* Bordes redondeados rectangulares */
+            border-radius: 12px !important;
             background: #ffffff !important;
-            border: 1px solid #ccc !important;
-            box-shadow: 0px 4px 10px rgba(0,0,0,0.1) !important;
+            color: #333333 !important;
+            border: 1px solid #d0d0d0 !important;
+            box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.15) !important;
             display: flex !important;
             align-items: center !important;
             justify-content: center !important;
         }
-        div.btn-derecha > div.stButton > button:hover {
+        
+        .btn-derecha > div.stButton > button:hover {
             background: #C7006A !important;
             color: white !important;
+            border-color: #C7006A !important;
             transform: scale(1.05) !important;
         }
         </style>
         """, unsafe_allow_html=True)
 
-    # Contenedor alineado a la derecha
-    c_izq, c_der = st.columns([10, 2]) 
-    with c_der:
-        st.markdown('<div class="btn-derecha">', unsafe_allow_html=True)
-        if st.button("🏠 Inicio", key="btn_inicio_dinamico"):
-            st.session_state['pagina_actual'] = "inicio"
-            st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+    # Renderizado directo en el contenedor fijo
+    st.markdown('<div class="btn-derecha">', unsafe_allow_html=True)
+    if st.button("🏠 Inicio", key="btn_inicio_dinamico"):
+        st.session_state['pagina_actual'] = "inicio"
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
