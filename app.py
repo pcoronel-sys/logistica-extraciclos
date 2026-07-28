@@ -20,7 +20,7 @@ HISTORICO_CANTIDAD_FILE = "base_historica_cantidad.csv"
 # 1. CONFIGURACIÓN DE PÁGINA
 st.set_page_config(page_title="Laboratorios Bagó - Conciliación Extra Ciclos", layout="wide", page_icon="🧪")
 
-# --- DISEÑO ESTÉTICO UI/UX PRO (ESTILOS BAGO) ---
+# --- DISEÑO ESTÉTICO UI/UX PRO (ESTILOS BAGO & GLASS) ---
 MAGENTA_BAGO = "#C7006A" 
 MAGENTA_OSCURO = "#8A004A"
 
@@ -31,7 +31,7 @@ st.markdown(f"""
     .welcome-text {{ text-align: center; color: #888; font-size: 1.2rem; font-weight: 300; letter-spacing: 2px; text-transform: uppercase; margin-bottom: -10px; }}
     .main-title {{ color: {MAGENTA_BAGO}; font-size: 5rem !important; font-weight: 900 !important; text-align: center; margin-top: 0px; letter-spacing: -4px; filter: drop-shadow(0px 10px 15px rgba(199, 0, 106, 0.2)); line-height: 1; }}
     
-    /* Botones de las tarjetas del menú principal */
+    /* 1. ESTILO Y TAMAÑO PARA LAS TARJETAS DEL MENÚ PRINCIPAL (GLASSMORPHISM) */
     .menu-card div.stButton > button {{ 
         background: rgba(250, 255, 255, 0.7) !important; 
         backdrop-filter: blur(15px) !important; 
@@ -51,22 +51,22 @@ st.markdown(f"""
         transform: translateY(-15px) scale(1.03) !important; 
     }}
     
-    /* Botón compacto para la cabecera / pestañas */
-    .header-btn div.stButton > button {{
-        height: 40px !important;
-        width: 120px !important;            /* 👈 EDITA ESTE VALOR PARA CAMBIAR EL ANCHO */
-        min-height: 40px !important;
+    /* 2. ESTILO EXCLUSIVO PARA EL BOTÓN DE INICIO AL LADO DE PESTAÑAS */
+    .btn-inicio-custom div.stButton > button {{
+        height: 38px !important;
+        width: 110px !important;            /* 👈 CAMBIA EL ANCHO AQUÍ A TU GUSTO */
+        min-height: 38px !important;
         padding: 0px !important;
         font-size: 0.95rem !important;
         font-weight: 700 !important;
         border-radius: 10px !important;
         background: #ffffff !important;
-        color: #333 !important;
-        border: 1px solid #cccccc !important;
+        color: #333333 !important;
+        border: 1px solid #d0d0d0 !important;
         box-shadow: 0 2px 6px rgba(0,0,0,0.08) !important;
         margin-top: 5px !important;
     }}
-    .header-btn div.stButton > button:hover {{
+    .btn-inicio-custom div.stButton > button:hover {{
         background: {MAGENTA_BAGO} !important;
         color: white !important;
         border-color: {MAGENTA_BAGO} !important;
@@ -109,7 +109,7 @@ def format_excel(df):
 def render_encabezado_mod():
     c_tabs, c_btn = st.columns([10, 2])
     with c_btn:
-        st.markdown('<div class="header-btn">', unsafe_allow_html=True)
+        st.markdown('<div class="btn-inicio-custom">', unsafe_allow_html=True)
         if st.button("🏠 Inicio", key=f"btn_nav_home_{st.session_state['pagina_actual']}"):
             st.session_state['pagina_actual'] = "inicio"
             st.rerun()
