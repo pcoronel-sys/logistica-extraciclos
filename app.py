@@ -16,7 +16,7 @@ HISTORICO_REPRO_FILE = "base_historica_repro.csv"
 PATH_GP_CANTIDAD = "master_gp_cantidad.csv"
 HISTORICO_CANTIDAD_FILE = "base_historica_cantidad.csv"
 
-# --- RUTAS CUARTO MÓDULO: RESUMEN GENERAL, PRODUCTO Y DOCTORES ---
+# --- RUTAS CUARTO MÓDULO: RESUMEN BULTOS, DOCTORES Y GP DESGLOSADO POR MES ---
 PATH_GP_M4 = "master_gp_m4.csv"
 PATH_COSTOS_M4 = "master_costos_m4.csv"
 HISTORICO_M4_FILE = "base_historica_m4.csv"
@@ -621,7 +621,7 @@ elif st.session_state['pagina_actual'] == "sistema_cantidad":
             st.info("No hay historial de cantidades registrado.")
 
 # ---------------------------------------------------------
-# PANTALLA 5: MÓDULO 4 (RESUMEN BULTOS, DOCTORES Y GP)
+# PANTALLA 5: MÓDULO 4 (RESUMEN DESGLOSADO POR MES)
 # ---------------------------------------------------------
 elif st.session_state['pagina_actual'] == "sistema_m4":
     if st.sidebar.button("⬅️ Volver al Menú Principal", key="back_m4"):
@@ -631,17 +631,13 @@ elif st.session_state['pagina_actual'] == "sistema_m4":
     m_gp_m4 = cargar_maestro(PATH_GP_M4)
     m_costos_m4 = cargar_maestro(PATH_COSTOS_M4)
 
-    tabs = st.tabs(["🚀 RESUMEN EJECUTIVO", "🔍 DETALLE Y DOCTORES", "⚙️ CONFIGURAR MAESTROS", "🗄️ HISTORIAL"])
+    tabs = st.tabs(["🚀 RESUMEN POR MES", "🔍 DETALLE REGISTROS", "⚙️ CONFIGURAR MAESTROS", "🗄️ HISTORIAL"])
 
-    with tabs[0]: # RESUMEN EJECUTIVO
+    with tabs[0]: # RESUMEN POR MES
         if m_gp_m4 is None or m_costos_m4 is None:
             st.warning("⚠️ Cargue el Maestro GP y el Maestro Costos en la pestaña Configurar.")
         else:
-            c1, c2 = st.columns([1, 2])
-            with c1: 
-                mes_sel = st.selectbox("Mes Proceso", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], key="mes_m4_sel")
-            with c2: 
-                archivo = st.file_uploader("Subir Archivo de Carga Mensual", type=['xlsx', 'xls', 'csv'], key="file_m4_up")
+            archivo = st.file_uploader("Subir Archivo de Carga (Contiene CODIGO, DENOMINACION MATERIAL, ZONA, BULTOS, MES, DOCTORES)", type=['xlsx', 'xls', 'csv'], key="file_m4_up")
 
             if archivo:
                 df_c = leer_archivo(archivo)
@@ -653,14 +649,16 @@ elif st.session_state['pagina_actual'] == "sistema_m4":
                     col_mat = [c for c in df_c.columns if 'DENOMINACION' in c or 'MATERIAL' in c or 'PROD' in c or 'DESC' in c]
                     col_zona = [c for c in df_c.columns if 'ZONA' in c]
                     col_doc = [c for c in df_c.columns if 'DOC' in c or 'MEDICO' in c or 'CLIENTE' in c]
+                    col_mes = [c for c in df_c.columns if 'MES' in c]
 
-                    if not col_zona or not col_doc or not col_mat:
-                        st.error("🛑 Error en el archivo: No se identificaron columnas válidas para DENOMINACION MATERIAL, ZONA o DOCTORES.")
+                    if not col_zona or not col_doc or not col_mat or not col_mes:
+                        st.error("🛑 Error en el archivo: Asegúrese de tener las columnas: CODIGO, DENOMINACION MATERIAL, DESCRIPCION ZONA, BULTOS, MES y DOCTORES.")
                     else:
                         df_c['CODIGO'] = df_c[col_cod].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                         df_c['DENOMINACION_MATERIAL'] = df_c[col_mat[0]].astype(str).str.strip().str.upper()
                         df_c['DESCRIPCIÓN ZONA'] = df_c[col_zona[0]].astype(str).str.strip().str.upper()
                         df_c['DOCTORES'] = df_c[col_doc[0]].astype(str).str.strip().str.upper()
+                        df_c['MES_CARGA'] = df_c[col_mes[0]].astype(str).str.strip().str.upper()
                         df_c['BULTOS'] = pd.to_numeric(df_c[col_bultos], errors='coerce').fillna(0)
 
                         # Preparar Maestro GP
@@ -696,16 +694,43 @@ elif st.session_state['pagina_actual'] == "sistema_m4":
                             res['IVA_15'] = res['SUBTOTAL_NETO'] * 0.15
                             res['TOTAL_FINAL'] = res['SUBTOTAL_NETO'] + res['IVA_15']
 
-                            st.subheader(f"📊 Métricas Clave del Mes: {mes_sel}")
-                            k1, k2, k3 = st.columns(3)
-                            k1.metric("📦 BULTOS DESPACHADOS", f"{res['BULTOS'].sum():,.0f}")
-                            k2.metric("👨‍⚕️ NÚMERO DE DOCTORES", f"{res['DOCTORES'].nunique():,.0f}")
-                            k3.metric("💰 TOTAL FACTURADO", f"$ {res['TOTAL_FINAL'].sum():,.2f}")
+                            st.markdown("### 📅 1. Resumen General Desglosado por Mes")
+                            summary_mes = res.groupby('MES_CARGA').agg(
+                                BULTOS_DESPACHADOS=('BULTOS', 'sum'),
+                                DOCTORES_UNICOS=('DOCTORES', 'nunique'),
+                                TOTAL_PREPARACION=('TOTAL_PREPARACION', 'sum'),
+                                TOTAL_TRANSPORTE=('TOTAL_TRANSPORTE', 'sum'),
+                                SUBTOTAL_NETO=('SUBTOTAL_NETO', 'sum'),
+                                IVA_15=('IVA_15', 'sum'),
+                                TOTAL_FINAL=('TOTAL_FINAL', 'sum')
+                            ).reset_index()
+
+                            summary_mes_f = pd.concat([summary_mes, pd.DataFrame([{
+                                'MES_CARGA': '--- TOTALES ---',
+                                'BULTOS_DESPACHADOS': summary_mes['BULTOS_DESPACHADOS'].sum(),
+                                'DOCTORES_UNICOS': res['DOCTORES'].nunique(),
+                                'TOTAL_PREPARACION': summary_mes['TOTAL_PREPARACION'].sum(),
+                                'TOTAL_TRANSPORTE': summary_mes['TOTAL_TRANSPORTE'].sum(),
+                                'SUBTOTAL_NETO': summary_mes['SUBTOTAL_NETO'].sum(),
+                                'IVA_15': summary_mes['IVA_15'].sum(),
+                                'TOTAL_FINAL': summary_mes['TOTAL_FINAL'].sum()
+                            }])], ignore_index=True)
+
+                            st.table(summary_mes_f.style.format({
+                                'BULTOS_DESPACHADOS': "{:,.0f}",
+                                'DOCTORES_UNICOS': "{:,.0f}",
+                                'TOTAL_PREPARACION': "{:,.2f}",
+                                'TOTAL_TRANSPORTE': "{:,.2f}",
+                                'SUBTOTAL_NETO': "{:,.2f}",
+                                'IVA_15': "{:,.2f}",
+                                'TOTAL_FINAL': "{:,.2f}"
+                            }))
 
                             st.divider()
 
-                            st.markdown("### 💰 1. Resumen de Costos por GP")
-                            summary_gp = res.groupby('GP').agg({
+                            st.markdown("### 💰 2. Resumen por Mes y GP")
+                            summary_mes_gp = res.groupby(['MES_CARGA', 'GP']).agg({
+                                'BULTOS': 'sum',
                                 'TOTAL_PREPARACION': 'sum',
                                 'TOTAL_TRANSPORTE': 'sum',
                                 'SUBTOTAL_NETO': 'sum',
@@ -713,71 +738,65 @@ elif st.session_state['pagina_actual'] == "sistema_m4":
                                 'TOTAL_FINAL': 'sum'
                             }).reset_index()
 
-                            summary_gp_f = pd.concat([summary_gp, pd.DataFrame([{
-                                'GP': '--- TOTALES ---',
-                                'TOTAL_PREPARACION': summary_gp['TOTAL_PREPARACION'].sum(),
-                                'TOTAL_TRANSPORTE': summary_gp['TOTAL_TRANSPORTE'].sum(),
-                                'SUBTOTAL_NETO': summary_gp['SUBTOTAL_NETO'].sum(),
-                                'IVA_15': summary_gp['IVA_15'].sum(),
-                                'TOTAL_FINAL': summary_gp['TOTAL_FINAL'].sum()
-                            }])], ignore_index=True)
+                            st.dataframe(summary_mes_gp.style.format({
+                                'BULTOS': "{:,.0f}",
+                                'TOTAL_PREPARACION': "{:,.2f}",
+                                'TOTAL_TRANSPORTE': "{:,.2f}",
+                                'SUBTOTAL_NETO': "{:,.2f}",
+                                'IVA_15': "{:,.2f}",
+                                'TOTAL_FINAL': "{:,.2f}"
+                            }), use_container_width=True)
 
-                            st.table(summary_gp_f.style.format(subset=summary_gp_f.columns[1:], formatter="{:,.2f}"))
+                            st.divider()
 
-                            st.markdown("### 📦 2. Resumen por Producto (Denominación Material) atado a su GP")
-                            summary_prod = res.groupby(['GP', 'DENOMINACION_MATERIAL']).agg({
+                            st.markdown("### 📦 3. Resumen por Mes, GP y Producto (Denominación Material)")
+                            summary_mes_prod = res.groupby(['MES_CARGA', 'GP', 'DENOMINACION_MATERIAL']).agg({
                                 'BULTOS': 'sum',
                                 'SUBTOTAL_NETO': 'sum',
                                 'IVA_15': 'sum',
                                 'TOTAL_FINAL': 'sum'
                             }).reset_index()
 
-                            summary_prod_f = pd.concat([summary_prod, pd.DataFrame([{
-                                'GP': '--- TOTALES ---',
-                                'DENOMINACION_MATERIAL': '---',
-                                'BULTOS': summary_prod['BULTOS'].sum(),
-                                'SUBTOTAL_NETO': summary_prod['SUBTOTAL_NETO'].sum(),
-                                'IVA_15': summary_prod['IVA_15'].sum(),
-                                'TOTAL_FINAL': summary_prod['TOTAL_FINAL'].sum()
-                            }])], ignore_index=True)
-
-                            st.table(summary_prod_f.style.format({
+                            st.dataframe(summary_mes_prod.style.format({
                                 'BULTOS': "{:,.0f}",
                                 'SUBTOTAL_NETO': "{:,.2f}",
                                 'IVA_15': "{:,.2f}",
                                 'TOTAL_FINAL': "{:,.2f}"
-                            }))
+                            }), use_container_width=True)
 
-                            d1, d2 = st.columns(2)
+                            d1, d2, d3 = st.columns(3)
                             with d1:
-                                st.download_button("📥 DESCARGAR RESUMEN GP", format_excel(summary_gp_f), f"Resumen_GP_{mes_sel}.xlsx")
+                                st.download_button("📥 DESCARGAR RESUMEN MES", format_excel(summary_mes_f), "Resumen_General_Meses.xlsx")
                             with d2:
-                                st.download_button("📥 DESCARGAR RESUMEN PRODUCTO GP", format_excel(summary_prod_f), f"Resumen_Producto_GP_{mes_sel}.xlsx")
+                                st.download_button("📥 DESCARGAR RESUMEN MES-GP", format_excel(summary_mes_gp), "Resumen_Mes_GP.xlsx")
+                            with d3:
+                                st.download_button("📥 DESCARGAR RESUMEN PRODUCTO", format_excel(summary_mes_prod), "Resumen_Mes_Producto.xlsx")
 
                             if st.button("💾 Guardar en Historial", key="save_hist_m4"):
-                                res['MES_PROCESO'] = mes_sel
                                 if os.path.exists(HISTORICO_M4_FILE):
                                     df_h_old = pd.read_csv(HISTORICO_M4_FILE)
-                                    df_h_old = df_h_old[df_h_old['MES_PROCESO'] != mes_sel]
+                                    meses_nuevos = res['MES_CARGA'].unique()
+                                    df_h_old = df_h_old[~df_h_old['MES_CARGA'].isin(meses_nuevos)]
                                     pd.concat([df_h_old, res], ignore_index=True).to_csv(HISTORICO_M4_FILE, index=False)
                                 else:
                                     res.to_csv(HISTORICO_M4_FILE, index=False)
                                 st.success("Guardado correctamente en historial.")
 
                             st.session_state['res_m4'] = res
-                            st.session_state['mes_m4_actual'] = mes_sel
 
     with tabs[1]: # DETALLE Y DOCTORES
         if 'res_m4' in st.session_state:
             df_full_m4 = st.session_state['res_m4']
 
-            st.markdown("### 🔍 Detalle de Carga Filtrada")
-            f1, f2, f3 = st.columns(3)
-            with f1: sel_gp = st.multiselect("Filtrar por GP", options=sorted(df_full_m4['GP'].unique()), key="f_gp_m4")
-            with f2: sel_mat = st.multiselect("Filtrar por Producto / Material", options=sorted(df_full_m4['DENOMINACION_MATERIAL'].unique()), key="f_mat_m4")
-            with f3: sel_zona = st.multiselect("Filtrar por Zona", options=sorted(df_full_m4['DESCRIPCIÓN ZONA'].unique()), key="f_zona_m4")
+            st.markdown("### 🔍 Detalle de Carga Registros y Doctores")
+            f1, f2, f3, f4 = st.columns(4)
+            with f1: sel_mes = st.multiselect("Filtrar por Mes", options=sorted(df_full_m4['MES_CARGA'].unique()), key="f_mes_m4")
+            with f2: sel_gp = st.multiselect("Filtrar por GP", options=sorted(df_full_m4['GP'].unique()), key="f_gp_m4")
+            with f3: sel_mat = st.multiselect("Filtrar por Producto", options=sorted(df_full_m4['DENOMINACION_MATERIAL'].unique()), key="f_mat_m4")
+            with f4: sel_zona = st.multiselect("Filtrar por Zona", options=sorted(df_full_m4['DESCRIPCIÓN ZONA'].unique()), key="f_zona_m4")
 
             df_v_m4 = df_full_m4.copy()
+            if sel_mes: df_v_m4 = df_v_m4[df_v_m4['MES_CARGA'].isin(sel_mes)]
             if sel_gp: df_v_m4 = df_v_m4[df_v_m4['GP'].isin(sel_gp)]
             if sel_mat: df_v_m4 = df_v_m4[df_v_m4['DENOMINACION_MATERIAL'].isin(sel_mat)]
             if sel_zona: df_v_m4 = df_v_m4[df_v_m4['DESCRIPCIÓN ZONA'].isin(sel_zona)]
@@ -788,7 +807,7 @@ elif st.session_state['pagina_actual'] == "sistema_m4":
             k3.metric("💰 FACTURADO FILTRADO", f"$ {df_v_m4['TOTAL_FINAL'].sum():,.2f}")
 
             st.divider()
-            st.download_button("📥 Descargar Carga Filtrada", format_excel(df_v_m4), f"Detalle_Carga_{st.session_state['mes_m4_actual']}.xlsx")
+            st.download_button("📥 Descargar Carga Filtrada", format_excel(df_v_m4), "Detalle_Carga_Filtrada.xlsx")
             st.dataframe(df_v_m4, use_container_width=True)
 
     with tabs[2]: # CONFIGURACIÓN
@@ -818,16 +837,16 @@ elif st.session_state['pagina_actual'] == "sistema_m4":
                 st.rerun()
 
     with tabs[3]: # HISTORIAL
-        st.header("🗄️ Historial de Procesos")
+        st.header("🗄️ Historial de Procesos por Mes")
         if os.path.exists(HISTORICO_M4_FILE):
             df_h_m4 = pd.read_csv(HISTORICO_M4_FILE)
             for c in ['TOTAL_FINAL', 'BULTOS']:
                 if c in df_h_m4.columns: df_h_m4[c] = pd.to_numeric(df_h_m4[c], errors='coerce').fillna(0)
 
-            meses_m4 = sorted(df_h_m4['MES_PROCESO'].dropna().unique())
+            meses_m4 = sorted(df_h_m4['MES_CARGA'].dropna().unique())
             if meses_m4:
                 m_h_m4 = st.selectbox("Seleccionar Mes:", meses_m4, key="hist_m4_sel")
-                df_mostrar_m4 = df_h_m4[df_h_m4['MES_PROCESO'] == m_h_m4]
+                df_mostrar_m4 = df_h_m4[df_h_m4['MES_CARGA'] == m_h_m4]
 
                 h1, h2, h3 = st.columns(3)
                 h1.metric("Bultos Históricos", f"{df_mostrar_m4['BULTOS'].sum():,.0f}")
@@ -838,7 +857,7 @@ elif st.session_state['pagina_actual'] == "sistema_m4":
 
                 st.markdown('<div class="small-btn">', unsafe_allow_html=True)
                 if st.button(f"🗑️ Eliminar historial de {m_h_m4}", key="del_m4_hist"):
-                    df_h_m4 = df_h_m4[df_h_m4['MES_PROCESO'] != m_h_m4]
+                    df_h_m4 = df_h_m4[df_h_m4['MES_CARGA'] != m_h_m4]
                     df_h_m4.to_csv(HISTORICO_M4_FILE, index=False)
                     st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
