@@ -531,25 +531,62 @@ elif st.session_state['pagina_actual'] == "sistema_cantidad":
                         st.session_state['res_cantidad'] = res[cols_existentes]
                         st.session_state['mes_cantidad_actual'] = mes_sel
 
-    with tabs[1]: # DETALLE CANTIDADES
+    with tabs[1]: # DETALLE CANTIDADES (ACTUALIZADO CON FILTRO Y RESUMEN POR MATERIAL)
         if 'res_cantidad' in st.session_state:
             df_full_c = st.session_state['res_cantidad']
             
-            st.markdown("### 🔍 Detalle Cantidades Despachadas")
-            f1, f2 = st.columns(2)
-            with f1: sel_gp_c = st.multiselect("Filtrar por GP", options=sorted(df_full_c['GP'].unique()), key="f_gp_c")
-            with f2: sel_tipo_c = st.multiselect("Filtrar por Tipo", options=sorted(df_full_c['TIPO'].unique()), key="f_tipo_c")
+            st.markdown("### 🔍 Detalle y Resumen por Material")
+            
+            # --- FILTROS (GP, Tipo y Denominación de Material) ---
+            f1, f2, f3 = st.columns(3)
+            with f1: 
+                sel_gp_c = st.multiselect("Filtrar por GP", options=sorted(df_full_c['GP'].dropna().unique()), key="f_gp_c")
+            with f2: 
+                sel_tipo_c = st.multiselect("Filtrar por Tipo", options=sorted(df_full_c['TIPO'].dropna().unique()), key="f_tipo_c")
+            with f3:
+                # Detección y filtro de columna de Descripción/Material
+                col_mat = 'DESCRIPCION' if 'DESCRIPCION' in df_full_c.columns else 'PRODUCTO'
+                opciones_mat = sorted(df_full_c[col_mat].dropna().unique()) if col_mat in df_full_c.columns else []
+                sel_mat_c = st.multiselect("Filtrar por Material / Producto", options=opciones_mat, key="f_mat_c")
 
+            # Aplicar filtros
             df_v_c = df_full_c.copy()
-            if sel_gp_c: df_v_c = df_v_c[df_v_c['GP'].isin(sel_gp_c)]
-            if sel_tipo_c: df_v_c = df_v_c[df_v_c['TIPO'].isin(sel_tipo_c)]
+            if sel_gp_c: 
+                df_v_c = df_v_c[df_v_c['GP'].isin(sel_gp_c)]
+            if sel_tipo_c: 
+                df_v_c = df_v_c[df_v_c['TIPO'].isin(sel_tipo_c)]
+            if sel_mat_c and col_mat in df_v_c.columns:
+                df_v_c = df_v_c[df_v_c[col_mat].isin(sel_mat_c)]
 
+            # Métricas
             k1, k2, k3 = st.columns(3)
             k1.metric("MM DESPACHADO", f"{df_v_c[df_v_c['TIPO']=='MM']['CANTIDAD_DESPACHADA'].sum():,.0f}")
             k2.metric("MP DESPACHADO", f"{df_v_c[df_v_c['TIPO']=='MP']['CANTIDAD_DESPACHADA'].sum():,.0f}")
             k3.metric("TOTAL DESPACHADO", f"{df_v_c['CANTIDAD_DESPACHADA'].sum():,.0f}")
             
             st.divider()
+
+            # --- TABLA DE RESUMEN ACUMULADO POR GP Y MATERIAL ---
+            st.subheader("📊 Resumen Acumulado por GP y Material")
+            if col_mat in df_v_c.columns:
+                resumen_gp_mat = df_v_c.groupby(['GP', col_mat, 'TIPO'])['CANTIDAD_DESPACHADA'].sum().reset_index()
+                
+                # Fila de totales acumulados
+                total_cant = resumen_gp_mat['CANTIDAD_DESPACHADA'].sum()
+                resumen_gp_mat_f = pd.concat([
+                    resumen_gp_mat, 
+                    pd.DataFrame([{'GP': '--- TOTALES ---', col_mat: '---', 'TIPO': '---', 'CANTIDAD_DESPACHADA': total_cant}])
+                ], ignore_index=True)
+                
+                st.dataframe(resumen_gp_mat_f.style.format({'CANTIDAD_DESPACHADA': "{:,.0f}"}), use_container_width=True)
+                st.download_button("📥 Descargar Resumen por Material", format_excel(resumen_gp_mat_f), f"Resumen_Material_{st.session_state['mes_cantidad_actual']}.xlsx")
+            else:
+                st.info("No se encontró una columna de descripción de material para agrupar.")
+
+            st.divider()
+
+            # --- DETALLE COMPLETO O FILTRADO ---
+            st.subheader("📋 Detalle Transaccional")
             st.download_button("📥 Descargar Detalle Cantidades", format_excel(df_v_c), f"Detalle_Cantidades_{st.session_state['mes_cantidad_actual']}.xlsx")
             st.dataframe(df_v_c, use_container_width=True)
 
