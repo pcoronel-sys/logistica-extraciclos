@@ -473,13 +473,15 @@ elif st.session_state['pagina_actual'] == "sistema_cantidad":
                     # Identificar columnas en archivo de carga
                     col_cant = 'CANTIDAD' if 'CANTIDAD' in df_c.columns else 'BULTOS' if 'BULTOS' in df_c.columns else df_c.columns[1]
                     col_cod = 'CODIGO' if 'CODIGO' in df_c.columns else df_c.columns[0]
-                    col_desc = [c for c in df_c.columns if 'DESC' in c or 'NOMBRE' in c or 'PRODUCTO' in c or 'MATERIAL' in c]
+                    col_desc = [c for c in df_c.columns if 'DETALLE' in c or 'DENOMINACION' in c or 'DESC' in c or 'NOMBRE' in c or 'PRODUCTO' in c or 'MATERIAL' in c]
 
                     df_c['CODIGO'] = df_c[col_cod].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                     df_c['CANTIDAD_DESPACHADA'] = pd.to_numeric(df_c[col_cant], errors='coerce').fillna(0)
                     
                     if col_desc:
-                        df_c['DESCRIPCION'] = df_c[col_desc[0]].astype(str).str.strip().str.upper()
+                        df_c['DETALLE_DESCRIPCION'] = df_c[col_desc[0]].astype(str).str.strip().str.upper()
+                    else:
+                        df_c['DETALLE_DESCRIPCION'] = "SIN DETALLE"
 
                     # Preparar Maestro GP Cantidad
                     col_id_gp = [c for c in m_gp_cant.columns if 'CODIGO' in c.upper() or 'PRODUCTO' in c.upper()][0]
@@ -488,11 +490,16 @@ elif st.session_state['pagina_actual'] == "sistema_cantidad":
                     m_gp_clean[col_id_gp] = m_gp_clean[col_id_gp].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                     m_gp_clean = m_gp_clean.drop_duplicates(subset=[col_id_gp])
 
+                    col_desc_m = [c for c in m_gp_clean.columns if 'DETALLE' in c or 'DENOMINACION' in c or 'DESC' in c or 'NOMBRE' in c or 'PRODUCTO' in c or 'MATERIAL' in c]
+
                     cols_merge_m = [col_id_gp, 'GP', 'TIPO']
-                    if 'DESCRIPCION' in m_gp_clean.columns and 'DESCRIPCION' not in df_c.columns:
-                        cols_merge_m.append('DESCRIPCION')
+                    if col_desc_m and 'DETALLE_DESCRIPCION' not in df_c.columns:
+                        cols_merge_m.append(col_desc_m[0])
 
                     res = pd.merge(df_c, m_gp_clean[cols_merge_m], left_on='CODIGO', right_on=col_id_gp, how='left')
+
+                    if col_desc_m and col_desc_m[0] in res.columns and 'DETALLE_DESCRIPCION' not in res.columns:
+                        res['DETALLE_DESCRIPCION'] = res[col_desc_m[0]].astype(str).str.strip().str.upper()
 
                     if res['GP'].isna().any():
                         st.error("🛑 BLOQUEO: Existen códigos sin registrar en el Maestro GP.")
@@ -522,29 +529,30 @@ elif st.session_state['pagina_actual'] == "sistema_cantidad":
                                 res.to_csv(HISTORICO_CANTIDAD_FILE, index=False)
                             st.success("Cantidades guardadas correctamente en historial.")
 
-                        # Conservar todas las columnas para el detalle sin perder el nombre/descripción del material
                         st.session_state['res_cantidad'] = res.copy()
                         st.session_state['mes_cantidad_actual'] = mes_sel
 
-    with tabs[1]: # DETALLE CANTIDADES (FILTRO Y RESUMEN POR MATERIAL)
+    with tabs[1]: # DETALLE CANTIDADES (FILTRO Y RESUMEN POR DETALLE Y GP)
         if 'res_cantidad' in st.session_state:
             df_full_c = st.session_state['res_cantidad']
             
-            st.markdown("### 🔍 Detalle y Resumen por Material")
+            st.markdown("### 🔍 Detalle y Resumen por Detalle / Producto")
             
-            # Identificar columna con el nombre/descripción del material
-            posibles_cols = [c for c in df_full_c.columns if 'DESC' in c or 'NOMBRE' in c or 'PRODUCTO' in c or 'MATERIAL' in c]
-            col_mat = posibles_cols[0] if posibles_cols else None
+            # Buscar la columna que contenga la descripción o detalle
+            col_det = 'DETALLE_DESCRIPCION' if 'DETALLE_DESCRIPCION' in df_full_c.columns else None
+            if not col_det:
+                posibles = [c for c in df_full_c.columns if 'DETALLE' in c or 'DENOMINACION' in c or 'DESC' in c or 'NOMBRE' in c or 'PRODUCTO' in c or 'MATERIAL' in c]
+                col_det = posibles[0] if posibles else None
 
-            # --- FILTROS (GP, Tipo y Denominación de Material) ---
+            # --- FILTROS (GP, Tipo y Filtro por Detalle) ---
             f1, f2, f3 = st.columns(3)
             with f1: 
                 sel_gp_c = st.multiselect("Filtrar por GP", options=sorted(df_full_c['GP'].dropna().unique()), key="f_gp_c")
             with f2: 
                 sel_tipo_c = st.multiselect("Filtrar por Tipo", options=sorted(df_full_c['TIPO'].dropna().unique()), key="f_tipo_c")
             with f3:
-                opciones_mat = sorted(df_full_c[col_mat].dropna().unique()) if col_mat else []
-                sel_mat_c = st.multiselect("Filtrar por Material / Producto", options=opciones_mat, key="f_mat_c")
+                opciones_det = sorted(df_full_c[col_det].dropna().unique()) if col_det else []
+                sel_det_c = st.multiselect("Filtrar por Detalle / Producto", options=opciones_det, key="f_det_c")
 
             # Aplicar filtros
             df_v_c = df_full_c.copy()
@@ -552,10 +560,10 @@ elif st.session_state['pagina_actual'] == "sistema_cantidad":
                 df_v_c = df_v_c[df_v_c['GP'].isin(sel_gp_c)]
             if sel_tipo_c: 
                 df_v_c = df_v_c[df_v_c['TIPO'].isin(sel_tipo_c)]
-            if sel_mat_c and col_mat:
-                df_v_c = df_v_c[df_v_c[col_mat].isin(sel_mat_c)]
+            if sel_det_c and col_det:
+                df_v_c = df_v_c[df_v_c[col_det].isin(sel_det_c)]
 
-            # Métricas
+            # Métricas rápidas
             k1, k2, k3 = st.columns(3)
             k1.metric("MM DESPACHADO", f"{df_v_c[df_v_c['TIPO']=='MM']['CANTIDAD_DESPACHADA'].sum():,.0f}")
             k2.metric("MP DESPACHADO", f"{df_v_c[df_v_c['TIPO']=='MP']['CANTIDAD_DESPACHADA'].sum():,.0f}")
@@ -563,28 +571,28 @@ elif st.session_state['pagina_actual'] == "sistema_cantidad":
             
             st.divider()
 
-            # --- TABLA DE RESUMEN ACUMULADO POR GP Y MATERIAL ---
-            st.subheader("📊 Resumen Acumulado por GP y Material")
-            if col_mat and col_mat in df_v_c.columns:
-                resumen_gp_mat = df_v_c.groupby(['GP', col_mat, 'TIPO'])['CANTIDAD_DESPACHADA'].sum().reset_index()
+            # --- TABLA DE RESUMEN ACUMULADO POR GP Y DETALLE ---
+            st.subheader("📊 Resumen Acumulado por GP y Detalle")
+            if col_det and col_det in df_v_c.columns:
+                resumen_gp_det = df_v_c.groupby(['GP', col_det, 'TIPO'])['CANTIDAD_DESPACHADA'].sum().reset_index()
                 
                 # Fila de totales
-                total_cant = resumen_gp_mat['CANTIDAD_DESPACHADA'].sum()
-                resumen_gp_mat_f = pd.concat([
-                    resumen_gp_mat, 
-                    pd.DataFrame([{'GP': '--- TOTALES ---', col_mat: '---', 'TIPO': '---', 'CANTIDAD_DESPACHADA': total_cant}])
+                total_cant = resumen_gp_det['CANTIDAD_DESPACHADA'].sum()
+                resumen_gp_det_f = pd.concat([
+                    resumen_gp_det, 
+                    pd.DataFrame([{'GP': '--- TOTALES ---', col_det: '---', 'TIPO': '---', 'CANTIDAD_DESPACHADA': total_cant}])
                 ], ignore_index=True)
                 
-                st.dataframe(resumen_gp_mat_f.style.format({'CANTIDAD_DESPACHADA': "{:,.0f}"}), use_container_width=True)
-                st.download_button("📥 Descargar Resumen por Material", format_excel(resumen_gp_mat_f), f"Resumen_Material_{st.session_state['mes_cantidad_actual']}.xlsx")
+                st.dataframe(resumen_gp_det_f.style.format({'CANTIDAD_DESPACHADA': "{:,.0f}"}), use_container_width=True)
+                st.download_button("📥 Descargar Resumen por Detalle y GP", format_excel(resumen_gp_det_f), f"Resumen_Detalle_GP_{st.session_state['mes_cantidad_actual']}.xlsx")
             else:
-                st.info("💡 Asegúrate de cargar un archivo que incluya la columna de Descripción, Nombre o Producto.")
+                st.info("💡 No se detectó columna de detalle en los datos procesados.")
 
             st.divider()
 
-            # --- DETALLE COMPLETO O FILTRADO ---
+            # --- TABLA CON DETALLE COMPLETO O FILTRADO ---
             st.subheader("📋 Detalle Transaccional")
-            st.download_button("📥 Descargar Detalle Cantidades", format_excel(df_v_c), f"Detalle_Cantidades_{st.session_state['mes_cantidad_actual']}.xlsx")
+            st.download_button("📥 Descargar Detalle Cantidades Completo", format_excel(df_v_c), f"Detalle_Cantidades_{st.session_state['mes_cantidad_actual']}.xlsx")
             st.dataframe(df_v_c, use_container_width=True)
 
     with tabs[2]: # CONFIGURACIÓN MAESTRO
