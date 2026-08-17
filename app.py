@@ -16,10 +16,10 @@ HISTORICO_REPRO_FILE = "base_historica_repro.csv"
 PATH_GP_CANTIDAD = "master_gp_cantidad.csv"
 HISTORICO_CANTIDAD_FILE = "base_historica_cantidad.csv"
 
-# --- RUTAS CUARTO MÓDULO: MÉTRICAS GENERALES Y MÉDICOS ---
-PATH_GP_MEDICOS = "master_gp_medicos.csv"
-PATH_COSTOS_MEDICOS = "master_costos_medicos.csv"
-HISTORICO_MEDICOS_FILE = "base_historica_medicos.csv"
+# --- RUTAS CUARTO MÓDULO: RESUMEN GENERAL, PRODUCTO Y DOCTORES ---
+PATH_GP_M4 = "master_gp_m4.csv"
+PATH_COSTOS_M4 = "master_costos_m4.csv"
+HISTORICO_M4_FILE = "base_historica_m4.csv"
 
 # 1. CONFIGURACIÓN DE PÁGINA
 st.set_page_config(page_title="Laboratorios Bagó - Conciliación Extra Ciclos", layout="wide", page_icon="🧪")
@@ -46,7 +46,7 @@ st.markdown(f"""
         width: 100% !important; 
         box-shadow: 0 20px 40px rgba(0,0,0,0.05) !important; 
         transition: all 0.6s cubic-bezier(0.165, 0.84, 0.44, 1.0) !important; 
-        font-size: 1.1rem !important; 
+        font-size: 1.05rem !important; 
         font-weight: 800 !important; 
     }}
     .menu-card div.stButton > button:hover {{ 
@@ -128,8 +128,8 @@ if st.session_state['pagina_actual'] == "inicio":
 
     with col4:
         st.markdown('<div class="menu-card">', unsafe_allow_html=True)
-        if st.button("👨‍⚕️ RESUMEN MATERIAL Y\nDOCTORES POR GP", key="btn_m4"):
-            st.session_state['pagina_actual'] = "sistema_medicos"
+        if st.button("📊 RESUMEN BULTOS,\nDOCTORES Y GP", key="btn_m4"):
+            st.session_state['pagina_actual'] = "sistema_m4"
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -621,72 +621,74 @@ elif st.session_state['pagina_actual'] == "sistema_cantidad":
             st.info("No hay historial de cantidades registrado.")
 
 # ---------------------------------------------------------
-# PANTALLA 5: MÓDULO (RESUMEN MATERIAL Y MÉDICOS)
+# PANTALLA 5: MÓDULO 4 (RESUMEN BULTOS, DOCTORES Y GP)
 # ---------------------------------------------------------
-elif st.session_state['pagina_actual'] == "sistema_medicos":
+elif st.session_state['pagina_actual'] == "sistema_m4":
     if st.sidebar.button("⬅️ Volver al Menú Principal", key="back_m4"):
         st.session_state['pagina_actual'] = "inicio"
         st.rerun()
 
-    m_gp_m = cargar_maestro(PATH_GP_MEDICOS)
-    m_costos_m = cargar_maestro(PATH_COSTOS_MEDICOS)
+    m_gp_m4 = cargar_maestro(PATH_GP_M4)
+    m_costos_m4 = cargar_maestro(PATH_COSTOS_M4)
 
-    tabs = st.tabs(["🚀 RESUMEN EJECUTIVO", "🔍 DETALLE REGISTROS Y DOCTORES", "⚙️ CONFIGURAR MAESTROS", "🗄️ HISTORIAL"])
+    tabs = st.tabs(["🚀 RESUMEN EJECUTIVO", "🔍 DETALLE Y DOCTORES", "⚙️ CONFIGURAR MAESTROS", "🗄️ HISTORIAL"])
 
-    with tabs[0]: # RESUMEN
-        if m_gp_m is None or m_costos_m is None:
-            st.warning("⚠️ Cargue los maestros GP y Costos específicos en la pestaña Configurar.")
+    with tabs[0]: # RESUMEN EJECUTIVO
+        if m_gp_m4 is None or m_costos_m4 is None:
+            st.warning("⚠️ Cargue el Maestro GP y el Maestro Costos en la pestaña Configurar.")
         else:
             c1, c2 = st.columns([1, 2])
             with c1: 
-                mes_sel = st.selectbox("Mes Proceso", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], key="mes_med_sel")
+                mes_sel = st.selectbox("Mes Proceso", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], key="mes_m4_sel")
             with c2: 
-                archivo = st.file_uploader("Subir Carga de Material y Doctores", type=['xlsx', 'xls', 'csv'], key="file_med_up")
+                archivo = st.file_uploader("Subir Archivo de Carga Mensual", type=['xlsx', 'xls', 'csv'], key="file_m4_up")
 
             if archivo:
                 df_c = leer_archivo(archivo)
                 if df_c is not None:
                     df_c.columns = df_c.columns.str.strip().str.upper()
 
-                    col_bultos = 'BULTOS' if 'BULTOS' in df_c.columns else 'CANTIDAD' if 'CANTIDAD' in df_c.columns else df_c.columns[1]
+                    col_bultos = 'BULTOS' if 'BULTOS' in df_c.columns else df_c.columns[1]
                     col_cod = 'CODIGO' if 'CODIGO' in df_c.columns else df_c.columns[0]
-                    col_doc = [c for c in df_c.columns if 'DOC' in c or 'MEDICO' in c or 'MED' in c or 'CLIENTE' in c]
-                    col_mat = [c for c in df_c.columns if 'MAT' in c or 'PROD' in c or 'DESC' in c or 'NOMBRE' in c]
+                    col_mat = [c for c in df_c.columns if 'DENOMINACION' in c or 'MATERIAL' in c or 'PROD' in c or 'DESC' in c]
+                    col_zona = [c for c in df_c.columns if 'ZONA' in c]
+                    col_doc = [c for c in df_c.columns if 'DOC' in c or 'MEDICO' in c or 'CLIENTE' in c]
 
-                    if not col_mat or not col_doc:
-                        st.error("🛑 Error en el archivo: No se identificaron columnas válidas de DETALLE MATERIAL o DOCTOR/MÉDICO.")
+                    if not col_zona or not col_doc or not col_mat:
+                        st.error("🛑 Error en el archivo: No se identificaron columnas válidas para DENOMINACION MATERIAL, ZONA o DOCTORES.")
                     else:
                         df_c['CODIGO'] = df_c[col_cod].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
-                        df_c['DETALLE_MATERIAL'] = df_c[col_mat[0]].astype(str).str.strip().str.upper()
-                        df_c['ID_DOCTOR'] = df_c[col_doc[0]].astype(str).str.strip().str.upper()
+                        df_c['DENOMINACION_MATERIAL'] = df_c[col_mat[0]].astype(str).str.strip().str.upper()
+                        df_c['DESCRIPCIÓN ZONA'] = df_c[col_zona[0]].astype(str).str.strip().str.upper()
+                        df_c['DOCTORES'] = df_c[col_doc[0]].astype(str).str.strip().str.upper()
                         df_c['BULTOS'] = pd.to_numeric(df_c[col_bultos], errors='coerce').fillna(0)
 
                         # Preparar Maestro GP
-                        col_id_gp = [c for c in m_gp_m.columns if 'CODIGO' in c.upper() or 'PRODUCTO' in c.upper() or 'MATERIAL' in c.upper()][0]
-                        m_gp_clean = m_gp_m.copy()
+                        col_id_gp = [c for c in m_gp_m4.columns if 'CODIGO' in c.upper() or 'PRODUCTO' in c.upper()][0]
+                        m_gp_clean = m_gp_m4.copy()
                         m_gp_clean.columns = m_gp_clean.columns.str.strip().str.upper()
                         m_gp_clean[col_id_gp] = m_gp_clean[col_id_gp].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                         m_gp_clean = m_gp_clean.drop_duplicates(subset=[col_id_gp])
 
-                        # Preparar Maestro Costos por Material / Codigo
-                        m_costos_clean = m_costos_m.copy()
+                        # Preparar Maestro Costos por Zona
+                        m_costos_clean = m_costos_m4.copy()
                         m_costos_clean.columns = m_costos_clean.columns.str.strip().str.upper()
-                        col_id_costo = [c for c in m_costos_clean.columns if 'CODIGO' in c or 'MATERIAL' in c or 'ZONA' in c][0]
                         renames = {c: "P_PREP" for c in m_costos_clean.columns if "PREP" in c}
                         renames.update({c: "P_TRANS" for c in m_costos_clean.columns if "TRANS" in c})
+                        renames.update({c: "DESCRIPCIÓN ZONA" for c in m_costos_clean.columns if "ZONA" in c})
                         m_costos_clean = m_costos_clean.rename(columns=renames)
-                        m_costos_clean[col_id_costo] = m_costos_clean[col_id_costo].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+                        m_costos_clean['DESCRIPCIÓN ZONA'] = m_costos_clean['DESCRIPCIÓN ZONA'].astype(str).str.strip().str.upper()
                         m_costos_clean['P_PREP'] = pd.to_numeric(m_costos_clean['P_PREP'], errors='coerce').fillna(0)
                         m_costos_clean['P_TRANS'] = pd.to_numeric(m_costos_clean['P_TRANS'], errors='coerce').fillna(0)
-                        m_costos_clean = m_costos_clean.drop_duplicates(subset=[col_id_costo])
+                        m_costos_clean = m_costos_clean.drop_duplicates(subset=['DESCRIPCIÓN ZONA'])
 
                         res = pd.merge(df_c, m_gp_clean[[col_id_gp, 'GP']], left_on='CODIGO', right_on=col_id_gp, how='left')
-                        res = pd.merge(res, m_costos_clean[[col_id_costo, 'P_PREP', 'P_TRANS']], left_on='CODIGO', right_on=col_id_costo, how='left')
+                        res = pd.merge(res, m_costos_clean[['DESCRIPCIÓN ZONA', 'P_PREP', 'P_TRANS']], on='DESCRIPCIÓN ZONA', how='left')
 
                         if res['GP'].isna().any() or res['P_PREP'].isna().any():
-                            st.error("🛑 BLOQUEO: Existen códigos o materiales sin registro en Maestros.")
-                            st.write("Códigos sin GP:", res[res['GP'].isna()]['CODIGO'].unique())
-                            st.write("Códigos sin Costo:", res[res['P_PREP'].isna()]['CODIGO'].unique())
+                            st.error("🛑 BLOQUEO: Existen códigos o zonas no registrados en los Maestros.")
+                            st.write("Códigos Faltantes:", res[res['GP'].isna()]['CODIGO'].unique())
+                            st.write("Zonas Faltantes:", res[res['P_PREP'].isna()]['DESCRIPCIÓN ZONA'].unique())
                         else:
                             res['TOTAL_PREPARACION'] = res['P_PREP'] * res['BULTOS']
                             res['TOTAL_TRANSPORTE'] = res['P_TRANS'] * res['BULTOS']
@@ -694,9 +696,16 @@ elif st.session_state['pagina_actual'] == "sistema_medicos":
                             res['IVA_15'] = res['SUBTOTAL_NETO'] * 0.15
                             res['TOTAL_FINAL'] = res['SUBTOTAL_NETO'] + res['IVA_15']
 
-                            st.markdown("### 💰 Resumen de Costos por GP (Basado en Detalle Material)")
-                            
-                            summary_costos = res.groupby('GP').agg({
+                            st.subheader(f"📊 Métricas Clave del Mes: {mes_sel}")
+                            k1, k2, k3 = st.columns(3)
+                            k1.metric("📦 BULTOS DESPACHADOS", f"{res['BULTOS'].sum():,.0f}")
+                            k2.metric("👨‍⚕️ NÚMERO DE DOCTORES", f"{res['DOCTORES'].nunique():,.0f}")
+                            k3.metric("💰 TOTAL FACTURADO", f"$ {res['TOTAL_FINAL'].sum():,.2f}")
+
+                            st.divider()
+
+                            st.markdown("### 💰 1. Resumen de Costos por GP")
+                            summary_gp = res.groupby('GP').agg({
                                 'TOTAL_PREPARACION': 'sum',
                                 'TOTAL_TRANSPORTE': 'sum',
                                 'SUBTOTAL_NETO': 'sum',
@@ -704,115 +713,133 @@ elif st.session_state['pagina_actual'] == "sistema_medicos":
                                 'TOTAL_FINAL': 'sum'
                             }).reset_index()
 
-                            summary_costos_f = pd.concat([summary_costos, pd.DataFrame([{
+                            summary_gp_f = pd.concat([summary_gp, pd.DataFrame([{
                                 'GP': '--- TOTALES ---',
-                                'TOTAL_PREPARACION': summary_costos['TOTAL_PREPARACION'].sum(),
-                                'TOTAL_TRANSPORTE': summary_costos['TOTAL_TRANSPORTE'].sum(),
-                                'SUBTOTAL_NETO': summary_costos['SUBTOTAL_NETO'].sum(),
-                                'IVA_15': summary_costos['IVA_15'].sum(),
-                                'TOTAL_FINAL': summary_costos['TOTAL_FINAL'].sum()
+                                'TOTAL_PREPARACION': summary_gp['TOTAL_PREPARACION'].sum(),
+                                'TOTAL_TRANSPORTE': summary_gp['TOTAL_TRANSPORTE'].sum(),
+                                'SUBTOTAL_NETO': summary_gp['SUBTOTAL_NETO'].sum(),
+                                'IVA_15': summary_gp['IVA_15'].sum(),
+                                'TOTAL_FINAL': summary_gp['TOTAL_FINAL'].sum()
                             }])], ignore_index=True)
 
-                            st.table(summary_costos_f.style.format(subset=summary_costos_f.columns[1:], formatter="{:,.2f}"))
-                            st.download_button("📥 DESCARGAR RESUMEN COSTOS", format_excel(summary_costos_f), f"Resumen_Costos_{mes_sel}.xlsx")
+                            st.table(summary_gp_f.style.format(subset=summary_gp_f.columns[1:], formatter="{:,.2f}"))
 
-                            if st.button("💾 Guardar en Historial", key="save_hist_med"):
+                            st.markdown("### 📦 2. Resumen por Producto (Denominación Material) atado a su GP")
+                            summary_prod = res.groupby(['GP', 'DENOMINACION_MATERIAL']).agg({
+                                'BULTOS': 'sum',
+                                'SUBTOTAL_NETO': 'sum',
+                                'IVA_15': 'sum',
+                                'TOTAL_FINAL': 'sum'
+                            }).reset_index()
+
+                            summary_prod_f = pd.concat([summary_prod, pd.DataFrame([{
+                                'GP': '--- TOTALES ---',
+                                'DENOMINACION_MATERIAL': '---',
+                                'BULTOS': summary_prod['BULTOS'].sum(),
+                                'SUBTOTAL_NETO': summary_prod['SUBTOTAL_NETO'].sum(),
+                                'IVA_15': summary_prod['IVA_15'].sum(),
+                                'TOTAL_FINAL': summary_prod['TOTAL_FINAL'].sum()
+                            }])], ignore_index=True)
+
+                            st.table(summary_prod_f.style.format({
+                                'BULTOS': "{:,.0f}",
+                                'SUBTOTAL_NETO': "{:,.2f}",
+                                'IVA_15': "{:,.2f}",
+                                'TOTAL_FINAL': "{:,.2f}"
+                            }))
+
+                            d1, d2 = st.columns(2)
+                            with d1:
+                                st.download_button("📥 DESCARGAR RESUMEN GP", format_excel(summary_gp_f), f"Resumen_GP_{mes_sel}.xlsx")
+                            with d2:
+                                st.download_button("📥 DESCARGAR RESUMEN PRODUCTO GP", format_excel(summary_prod_f), f"Resumen_Producto_GP_{mes_sel}.xlsx")
+
+                            if st.button("💾 Guardar en Historial", key="save_hist_m4"):
                                 res['MES_PROCESO'] = mes_sel
-                                if os.path.exists(HISTORICO_MEDICOS_FILE):
-                                    df_h_old = pd.read_csv(HISTORICO_MEDICOS_FILE)
+                                if os.path.exists(HISTORICO_M4_FILE):
+                                    df_h_old = pd.read_csv(HISTORICO_M4_FILE)
                                     df_h_old = df_h_old[df_h_old['MES_PROCESO'] != mes_sel]
-                                    pd.concat([df_h_old, res], ignore_index=True).to_csv(HISTORICO_MEDICOS_FILE, index=False)
+                                    pd.concat([df_h_old, res], ignore_index=True).to_csv(HISTORICO_M4_FILE, index=False)
                                 else:
-                                    res.to_csv(HISTORICO_MEDICOS_FILE, index=False)
+                                    res.to_csv(HISTORICO_M4_FILE, index=False)
                                 st.success("Guardado correctamente en historial.")
 
-                            st.session_state['res_medicos'] = res
-                            st.session_state['mes_medicos_actual'] = mes_sel
+                            st.session_state['res_m4'] = res
+                            st.session_state['mes_m4_actual'] = mes_sel
 
     with tabs[1]: # DETALLE Y DOCTORES
-        if 'res_medicos' in st.session_state:
-            df_full_m = st.session_state['res_medicos']
+        if 'res_m4' in st.session_state:
+            df_full_m4 = st.session_state['res_m4']
 
-            st.markdown("### 🔍 Detalle de Registros y Métricas de Doctores")
-            f1, f2 = st.columns(2)
-            with f1: sel_gp_m = st.multiselect("Filtrar por GP", options=sorted(df_full_m['GP'].unique()), key="f_gp_med")
-            with f2: sel_mat_m = st.multiselect("Filtrar por Detalle Material", options=sorted(df_full_m['DETALLE_MATERIAL'].unique()), key="f_mat_med")
+            st.markdown("### 🔍 Detalle de Carga Filtrada")
+            f1, f2, f3 = st.columns(3)
+            with f1: sel_gp = st.multiselect("Filtrar por GP", options=sorted(df_full_m4['GP'].unique()), key="f_gp_m4")
+            with f2: sel_mat = st.multiselect("Filtrar por Producto / Material", options=sorted(df_full_m4['DENOMINACION_MATERIAL'].unique()), key="f_mat_m4")
+            with f3: sel_zona = st.multiselect("Filtrar por Zona", options=sorted(df_full_m4['DESCRIPCIÓN ZONA'].unique()), key="f_zona_m4")
 
-            df_v_m = df_full_m.copy()
-            if sel_gp_m: df_v_m = df_v_m[df_v_m['GP'].isin(sel_gp_m)]
-            if sel_mat_m: df_v_m = df_v_m[df_v_m['DETALLE_MATERIAL'].isin(sel_mat_m)]
+            df_v_m4 = df_full_m4.copy()
+            if sel_gp: df_v_m4 = df_v_m4[df_v_m4['GP'].isin(sel_gp)]
+            if sel_mat: df_v_m4 = df_v_m4[df_v_m4['DENOMINACION_MATERIAL'].isin(sel_mat)]
+            if sel_zona: df_v_m4 = df_v_m4[df_v_m4['DESCRIPCIÓN ZONA'].isin(sel_zona)]
 
-            # KPIs PRINCIPALES DEL MÓDULO (INCLUYE NUMERO DE DOCTORES FACTURADOS)
-            k1, k2, k3, k4 = st.columns(4)
-            k1.metric("👨‍⚕️ DOCTORES UNICOS FACTURADOS", f"{df_v_m['ID_DOCTOR'].nunique():,.0f}")
-            k2.metric("📦 BULTOS TOTALES", f"{df_v_m['BULTOS'].sum():,.0f}")
-            k3.metric("📝 TOTAL REGISTROS", f"{len(df_v_m):,.0f}")
-            k4.metric("💰 TOTAL FACTURADO", f"$ {df_v_m['TOTAL_FINAL'].sum():,.2f}")
-
-            st.divider()
-
-            # TABLA RESUMEN DE DOCTORES FACTURADOS POR GP Y DETALLE MATERIAL
-            st.subheader("📊 Desglose de Doctores Atendidos por GP y Material")
-            desglose_doc = df_v_m.groupby(['GP', 'DETALLE_MATERIAL']).agg(
-                DOCTORES_UNICOS=('ID_DOCTOR', 'nunique'),
-                BULTOS_DESPACHADOS=('BULTOS', 'sum')
-            ).reset_index()
-
-            st.dataframe(desglose_doc, use_container_width=True)
+            k1, k2, k3 = st.columns(3)
+            k1.metric("📦 BULTOS FILTRADOS", f"{df_v_m4['BULTOS'].sum():,.0f}")
+            k2.metric("👨‍⚕️ DOCTORES ÚNICOS", f"{df_v_m4['DOCTORES'].nunique():,.0f}")
+            k3.metric("💰 FACTURADO FILTRADO", f"$ {df_v_m4['TOTAL_FINAL'].sum():,.2f}")
 
             st.divider()
-            st.download_button("📥 Descargar Registros Detallados", format_excel(df_v_m), f"Detalle_Registros_Medicos_{st.session_state['mes_medicos_actual']}.xlsx")
-            st.dataframe(df_v_m, use_container_width=True)
+            st.download_button("📥 Descargar Carga Filtrada", format_excel(df_v_m4), f"Detalle_Carga_{st.session_state['mes_m4_actual']}.xlsx")
+            st.dataframe(df_v_m4, use_container_width=True)
 
-    with tabs[2]: # CONFIGURACIÓN MAESTROS
-        st.header("⚙️ Maestros para Módulo Detalle Material")
+    with tabs[2]: # CONFIGURACIÓN
+        st.header("⚙️ Maestros del Módulo")
         ca, cb = st.columns(2)
-        m_med_actualizado = False
+        m_m4_actualizado = False
         with ca:
-            ug = st.file_uploader("Cargar Maestro GP", type=['csv','xlsx'], key="up_gp_med_tab")
+            ug = st.file_uploader("Cargar Maestro GP", type=['csv','xlsx'], key="up_gp_m4_tab")
             if ug:
                 d = leer_archivo(ug)
                 if d is not None:
-                    d.to_csv(PATH_GP_MEDICOS, index=False)
+                    d.to_csv(PATH_GP_M4, index=False)
                     st.success("Maestro GP Guardado")
-                    m_med_actualizado = True
+                    m_m4_actualizado = True
         with cb:
-            uc = st.file_uploader("Cargar Maestro Costos (por Código/Material)", type=['csv','xlsx'], key="up_co_med_tab")
+            uc = st.file_uploader("Cargar Maestro Costos (por Zona)", type=['csv','xlsx'], key="up_co_m4_tab")
             if uc:
                 d = leer_archivo(uc)
                 if d is not None:
-                    d.to_csv(PATH_COSTOS_MEDICOS, index=False)
+                    d.to_csv(PATH_COSTOS_M4, index=False)
                     st.success("Maestro Costos Guardado")
-                    m_med_actualizado = True
+                    m_m4_actualizado = True
 
-        if m_med_actualizado or os.path.exists(PATH_GP_MEDICOS) or os.path.exists(PATH_COSTOS_MEDICOS):
+        if m_m4_actualizado or os.path.exists(PATH_GP_M4) or os.path.exists(PATH_COSTOS_M4):
             st.divider()
-            if st.button("🔄 Actualizar Datos y Continuar", key="btn_refresco_med"):
+            if st.button("🔄 Actualizar Datos y Continuar", key="btn_refresco_m4"):
                 st.rerun()
 
     with tabs[3]: # HISTORIAL
-        st.header("🗄️ Historial Módulo Médicos")
-        if os.path.exists(HISTORICO_MEDICOS_FILE):
-            df_h_m = pd.read_csv(HISTORICO_MEDICOS_FILE)
+        st.header("🗄️ Historial de Procesos")
+        if os.path.exists(HISTORICO_M4_FILE):
+            df_h_m4 = pd.read_csv(HISTORICO_M4_FILE)
             for c in ['TOTAL_FINAL', 'BULTOS']:
-                if c in df_h_m.columns: df_h_m[c] = pd.to_numeric(df_h_m[c], errors='coerce').fillna(0)
+                if c in df_h_m4.columns: df_h_m4[c] = pd.to_numeric(df_h_m4[c], errors='coerce').fillna(0)
 
-            meses_m = sorted(df_h_m['MES_PROCESO'].dropna().unique())
-            if meses_m:
-                m_h_m = st.selectbox("Seleccionar Mes:", meses_m, key="hist_med_sel")
-                df_mostrar_m = df_h_m[df_h_m['MES_PROCESO'] == m_h_m]
+            meses_m4 = sorted(df_h_m4['MES_PROCESO'].dropna().unique())
+            if meses_m4:
+                m_h_m4 = st.selectbox("Seleccionar Mes:", meses_m4, key="hist_m4_sel")
+                df_mostrar_m4 = df_h_m4[df_h_m4['MES_PROCESO'] == m_h_m4]
 
                 h1, h2, h3 = st.columns(3)
-                h1.metric("Doctores Atendidos", f"{df_mostrar_m['ID_DOCTOR'].nunique():,.0f}")
-                h2.metric("Bultos Históricos", f"{df_mostrar_m['BULTOS'].sum():,.0f}")
-                h3.metric("Total Facturado", f"$ {df_mostrar_m['TOTAL_FINAL'].sum():,.2f}")
+                h1.metric("Bultos Históricos", f"{df_mostrar_m4['BULTOS'].sum():,.0f}")
+                h2.metric("Doctores Históricos", f"{df_mostrar_m4['DOCTORES'].nunique():,.0f}")
+                h3.metric("Total Facturado", f"$ {df_mostrar_m4['TOTAL_FINAL'].sum():,.2f}")
 
-                st.dataframe(df_mostrar_m, use_container_width=True)
+                st.dataframe(df_mostrar_m4, use_container_width=True)
 
                 st.markdown('<div class="small-btn">', unsafe_allow_html=True)
-                if st.button(f"🗑️ Eliminar historial de {m_h_m}", key="del_med_hist"):
-                    df_h_m = df_h_m[df_h_m['MES_PROCESO'] != m_h_m]
-                    df_h_m.to_csv(HISTORICO_MEDICOS_FILE, index=False)
+                if st.button(f"🗑️ Eliminar historial de {m_h_m4}", key="del_m4_hist"):
+                    df_h_m4 = df_h_m4[df_h_m4['MES_PROCESO'] != m_h_m4]
+                    df_h_m4.to_csv(HISTORICO_M4_FILE, index=False)
                     st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
         else:
