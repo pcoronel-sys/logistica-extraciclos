@@ -37,7 +37,7 @@ st.markdown(f"""
     
     /* Botones estilo Tarjeta (Menu Principal) */
     .menu-card div.stButton > button {{ 
-        background: rgba(250, 255, 255, 0.7) !important; 
+        background: rgba(250, 200, 255, 0.7) !important; 
         backdrop-filter: blur(15px) !important; 
         color: #333 !important; 
         border: 1px solid rgba(200, 200, 200, 0.3) !important; 
