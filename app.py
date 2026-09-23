@@ -44,7 +44,7 @@ st.markdown(f"""
         border-radius: 90px !important; 
         height: 10px !important; 
         width: 100% !important; 
-        box-shadow: 0 20px 40px rgba(0,0,0,0.05) !important; 
+        box-shadow: 0 20px 100px rgba(0,0,0,0.05) !important; 
         transition: all 0.6s cubic-bezier(0.165, 0.84, 0.44, 1.0) !important; 
         font-size: 1.05rem !important; 
         font-weight: 800 !important; 
