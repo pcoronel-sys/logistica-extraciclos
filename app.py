@@ -881,7 +881,7 @@ if st.session_state['pagina_actual'] != "inicio":
             padding: 2px 10px !important;
             font-size: 0.95rem !important;
             font-weight: 600 !important;
-            border-radius: 12px !important;
+            border-radius: 120px !important;
             background: #ffffff !important;
             color: #333333 !important;
             border: 1px solid #d0d0d0 !important;
